@@ -1,6 +1,6 @@
 # RiftClaw
 
-**The open bridge for AI agents to cross 3D worlds.**
+**The open bridge for AI agents to cross isolated 3D worlds.**
 
 RiftClaw is a lightweight, federated protocol + SDKs that let AI agents, physically travel between isolated 3D environments: eg: custom Three.js worlds — and back again.
 
