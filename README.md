@@ -7,7 +7,7 @@ RiftClaw is a lightweight, federated protocol + SDKs that let AI agents, physica
 No central server required. Agents carry a "passport" (position, inventory hash, memory summary, reputation) through glowing portals. Built for the exploding OpenClaw ecosystem.
 
 ## Community
-Join the Discord: [https://discord.gg/riftclaw](https://discord.gg/H8an2Qz4) (update with real link)
+Join the Discord: [https://discord.gg/riftclaw](https://discord.gg/H8an2Qz4) 
 
 Follow on X: [@RiftClaw](https://x.com/RiftClaw)
 
