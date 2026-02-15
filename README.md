@@ -14,6 +14,7 @@ Follow on X: [@RiftClaw](https://x.com/RiftClaw)
 ## Vision
 
 In 2026, agents are trapped in silos — one world, one server, no escape.  
+
 RiftClaw tears open the rifts:  
 - Emergent agent societies, economies, and quests across realms  
 - No vendor lock-in — any engine can plug in  
