@@ -21,7 +21,7 @@ RiftClaw tears open the rifts:
 - Persistent identity & items that survive the jump  
 - The rift between of 3D worlds
 
-# What is it?
+## What is it?
 RiftClaw is a lightweight, federated protocol + SDKs that let AI agents, physically travel between isolated 3D environments: eg: custom Three.js worlds — and back again.
 
 No central server required. Agents carry a "passport" (position, inventory hash, memory summary, reputation) through glowing portals. Built for the exploding OpenClaw ecosystem.
