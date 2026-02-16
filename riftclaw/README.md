@@ -33,6 +33,19 @@ pip install -r requirements.txt
 - `pynacl` - Ed25519 cryptographic signatures
 - `pyyaml` - Configuration file parsing
 
+# riftclaw Package
+
+This folder contains the core RiftClaw OpenClaw skill (v0.1.1).
+
+## Setup
+1. `python3 -m venv venv`
+2. `source venv/bin/activate`
+3. `pip install -r requirements.txt`
+4. `export PYTHONPATH=.`
+5. Test: `python3 -c "from skill.riftclaw import RiftClawSkill; skill = RiftClawSkill(); print(skill.get_status())"`
+
+See `examples.py` for usage demos.
+
 ## 🚀 Quick Start
 
 ### Basic Connection
