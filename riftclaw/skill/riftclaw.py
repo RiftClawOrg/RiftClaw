@@ -566,18 +566,38 @@ class RiftClawSkill:
             return None
     
     def discover(self) -> List[Portal]:
-        """Discover available portals in the current world."""
         if not self.connected:
             raise ConnectionError("Not connected")
-        
+    
         self._send_message('discover')
         response = self._wait_for_response('discover_response')
         if not response or 'portals' not in response:
             return []
-        
-        self._portals = [Portal.from_discovery(p) for p in response['portals']]
-        return self._portals.copy()
     
+        # Clear old portals to prevent state leak
+        self._portals = []
+    
+        for item in response['portals']:
+            # Force to dict — handle any type safely
+            if isinstance(item, dict):
+                portal_dict = item
+            elif hasattr(item, 'to_dict'):
+                portal_dict = item.to_dict()
+            elif hasattr(item, '__dict__'):
+                portal_dict = vars(item)  # fallback for custom objects
+            else:
+                logger.warning(f"Skipping invalid portal item type: {type(item)}")
+                continue
+        
+            try:
+                portal = Portal.from_discovery(portal_dict)
+                self._portals.append(portal)
+            except Exception as e:
+                logger.error(f"Failed to parse portal: {e}")
+    
+        logger.info(f"Discovered {len(self._portals)} portals")
+        return self._portals.copy()
+
     def create_passport(self, target_world: str, **kwargs) -> AgentPassport:
         """
         Create a signed passport for cross-world traversal.
