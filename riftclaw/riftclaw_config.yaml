@@ -6,7 +6,8 @@ agent_id: null  # Auto-generated UUID if not provided
 agent_name: "RiftWalker_Alpha"
 
 # Default World Connection
-default_world: "wss://molt.space/lobby"
+# Using echo server for testing - replace with real world in production
+default_world: "wss://echo.websocket.org"
 
 # Connection Settings
 connection_timeout: 30
