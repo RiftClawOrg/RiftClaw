@@ -166,7 +166,7 @@ class RiftClawSkill:
     DEFAULT_CONFIG = {
         'agent_id': None,  # Auto-generated if not provided
         'agent_name': 'RiftWalker',
-        'default_world': 'wss://molt.space/lobby',
+        'default_world': 'wss://echo.websocket.org',
         'connection_timeout': 30,
         'handoff_timeout': 60,
         'auto_reconnect': True,
@@ -343,9 +343,9 @@ class RiftClawSkill:
     
     def _register_default_handlers(self):
         """Register default message handlers."""
-        self._message_handlers['portal_list'] = self._handle_portal_list
-        self._message_handlers['handoff_response'] = self._handle_handoff_response
+        self._message_handlers['discover_response'] = self._handle_portal_list
         self._message_handlers['handoff_confirm'] = self._handle_handoff_confirm
+        self._message_handlers['handoff_rejected'] = self._handle_error
         self._message_handlers['error'] = self._handle_error
         self._message_handlers['welcome'] = self._handle_welcome
     
@@ -372,11 +372,11 @@ class RiftClawSkill:
         if self.config.get('security', {}).get('require_signatures', True):
             if not self.verify_handoff(data):
                 logger.error("Handoff signature validation failed!")
-                self._resolve_pending('handoff', {'error': 'invalid_signature'})
+                self._resolve_pending('handoff_confirm', {'error': 'invalid_signature'})
                 return
         
         self.state = PortalState.TRANSITIONING
-        self._resolve_pending('handoff', data)
+        self._resolve_pending('handoff_confirm', data)
     
     def _handle_error(self, data: Dict[str, Any]):
         """Handle error messages from world."""
@@ -519,24 +519,35 @@ class RiftClawSkill:
         self.current_world = None
         logger.info("Disconnected")
     
-    def _send_message(self, msg_type: str, data: Dict[str, Any]) -> bool:
-        """Send a message to the connected world."""
+    def _send_message(self, msg_type: str, payload: Dict[str, Any] = None) -> bool:
+        """Send a message to the connected world with flat JSON format and signature."""
         if not self.ws or not self.connected:
-            logger.error("Not connected to any world")
+            logger.error("Not connected")
             return False
-        
+
+        payload = payload or {}
         message = {
-            'type': msg_type,
-            'agent_id': self.config['agent_id'],
-            'timestamp': time.time(),
-            'data': data
+            "type": msg_type,
+            "agent_id": self.config["agent_id"],
+            "timestamp": time.time(),
+            **payload
         }
-        
+
+        # Sign the message (exclude signature field)
+        if self._signing_key and nacl:
+            msg_bytes = json.dumps(
+                {k: v for k, v in message.items() if k != "signature"},
+                sort_keys=True
+            ).encode('utf-8')
+            signature = self._signing_key.sign(msg_bytes).signature
+            message["signature"] = base64.b64encode(signature).decode('utf-8')
+
         try:
             self.ws.send(json.dumps(message))
+            logger.debug(f"Sent {msg_type}")
             return True
         except Exception as e:
-            logger.error(f"Failed to send message: {e}")
+            logger.error(f"Send failed: {e}")
             return False
     
     def _wait_for_response(self, operation: str, timeout: Optional[float] = None) -> Optional[Dict]:
@@ -555,28 +566,17 @@ class RiftClawSkill:
             return None
     
     def discover(self) -> List[Portal]:
-        """
-        Discover available portals in the current world.
-        
-        Returns:
-            List of available Portal objects
-            
-        Raises:
-            ConnectionError: If not connected to a world
-        """
+        """Discover available portals in the current world."""
         if not self.connected:
-            raise ConnectionError("Not connected to any world")
+            raise ConnectionError("Not connected")
         
-        self.state = PortalState.DISCOVERING
-        logger.info("Discovering portals...")
+        self._send_message('discover')
+        response = self._wait_for_response('discover_response')
+        if not response or 'portals' not in response:
+            return []
         
-        if self._send_message('discover', {}):
-            response = self._wait_for_response('discover', timeout=10)
-            if response and 'portals' in response:
-                return response['portals']
-        
-        self.state = PortalState.CONNECTED
-        return []
+        self._portals = [Portal.from_discovery(p) for p in response['portals']]
+        return self._portals.copy()
     
     def create_passport(self, target_world: str, **kwargs) -> AgentPassport:
         """
@@ -659,7 +659,7 @@ class RiftClawSkill:
             raise HandoffError("Failed to send handoff request")
         
         # Wait for confirmation
-        response = self._wait_for_response('handoff')
+        response = self._wait_for_response('handoff_confirm')
         
         if not response:
             self.state = PortalState.CONNECTED
@@ -700,18 +700,10 @@ class RiftClawSkill:
         }
     
     def verify_handoff(self, response: Dict[str, Any]) -> bool:
-        """
-        Validate handoff signature from destination world.
+        """Validate handoff signature from destination world."""
+        # Log full response for debugging
+        logger.debug(f"verify_handoff response: {json.dumps(response, indent=2, default=str)}")
         
-        Args:
-            response: Handoff response containing signature data
-            
-        Returns:
-            True if signature valid, False otherwise
-            
-        Raises:
-            SecurityError: If signature validation fails critically
-        """
         if not nacl:
             logger.warning("PyNaCl not installed - skipping signature verification")
             return not self.config.get('security', {}).get('require_signatures', True)
