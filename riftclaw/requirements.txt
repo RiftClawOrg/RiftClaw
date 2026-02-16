@@ -1,4 +1,4 @@
-# RiftClaw - Cross-World Portal Traversal 
+# RiftClaw - Cross-World Portal Traversal
 # Core dependencies for inter-world agent travel
 
 # WebSocket client for world connections
