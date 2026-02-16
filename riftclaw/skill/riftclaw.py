@@ -354,7 +354,7 @@ class RiftClawSkill:
         portals_data = data.get('portals', [])
         self._portals = [Portal.from_discovery(p) for p in portals_data]
         logger.info(f"Discovered {len(self._portals)} portals")
-        self._resolve_pending('discover', {'portals': self._portals})
+        self._resolve_pending('discover_response', {'portals': self._portals})
     
     def _handle_handoff_response(self, data: Dict[str, Any]):
         """Handle handoff initiation response."""
