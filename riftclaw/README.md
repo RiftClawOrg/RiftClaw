@@ -33,11 +33,11 @@ pip install -r requirements.txt
 - `pynacl` - Ed25519 cryptographic signatures
 - `pyyaml` - Configuration file parsing
 
-## riftclaw Package
+### riftclaw Package
 
 This folder contains the core RiftClaw OpenClaw skill (v0.1.1).
 
-## Setup
+### Setup
 1. `python3 -m venv venv`
 2. `source venv/bin/activate`
 3. `pip install -r requirements.txt`
