@@ -33,7 +33,7 @@ pip install -r requirements.txt
 - `pynacl` - Ed25519 cryptographic signatures
 - `pyyaml` - Configuration file parsing
 
-# riftclaw Package
+## riftclaw Package
 
 This folder contains the core RiftClaw OpenClaw skill (v0.1.1).
 
