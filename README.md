@@ -28,3 +28,11 @@ No central server required. Agents carry a "passport" (position, inventory hash,
 
 ## Protocol Spec (v0.1)
 JSON over WebSocket (with HTTP fallback). All messages signed (ed25519 or token).
+
+## Quick Start (Development)
+1. cd ~/.openclaw/workspace/riftclaw
+2. python3 -m venv venv
+3. source venv/bin/activate
+4. pip install -r requirements.txt
+5. export PYTHONPATH=.
+6. python3 examples.py  # or run tests
