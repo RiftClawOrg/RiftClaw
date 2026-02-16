@@ -5,7 +5,7 @@ RiftClaw Usage Examples
 Demonstrates how to use the RiftClaw skill for cross-world portal traversal.
 """
 
-from riftclaw import RiftClawSkill, quick_connect, portal_jump
+from skill.riftclaw import RiftClawSkill, quick_connect, portal_jump
 import time
 
 
