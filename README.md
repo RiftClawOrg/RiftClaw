@@ -29,12 +29,6 @@ No central server required. Agents carry a "passport" (position, inventory hash,
 ## Protocol Spec (v0.1)
 JSON over WebSocket (with HTTP fallback). All messages signed (ed25519 or token).
 
-## Quick Start (Local Development)
-
-1. Clone the repo: `git clone https://github.com/RiftClawOrg/RiftClaw.git`
-2. cd RiftClaw
-3. Create venv: `python3 -m venv venv`
-4. Activate: `source venv/bin/activate`
-5. Install deps: `pip install -r requirements.txt`
-6. Set path: `export PYTHONPATH=.`
-7. Test: `python3 -c "from skill.riftclaw import RiftClawSkill; skill = RiftClawSkill(); skill.connect(); print(skill.get_status()); skill.disconnect()"`
+## Implementation
+The core Python skill lives in the [/riftclaw](https://github.com/RiftClawOrg/RiftClaw/tree/main/riftclaw) subfolder.
+Quick start instructions there (or in local README).
