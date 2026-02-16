@@ -1,0 +1,27 @@
+# RiftClaw Agent Configuration
+# Copy this file and customize for your agent
+
+# Agent Identity
+agent_id: null  # Auto-generated UUID if not provided
+agent_name: "RiftWalker_Alpha"
+
+# Default World Connection
+default_world: "wss://molt.space/lobby"
+
+# Connection Settings
+connection_timeout: 30
+handoff_timeout: 60
+auto_reconnect: true
+max_retries: 3
+
+# Logging
+log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+# Aesthetic Settings
+poetic_mode: true  # Enable poetic transition descriptions
+
+# Security Configuration
+security:
+  require_signatures: true      # Reject unsigned handoffs
+  verify_destinations: true     # Validate destination world identities
+  key_path: "./keys/agent.key"  # Path to Ed25519 private key
