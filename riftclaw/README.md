@@ -44,7 +44,6 @@ This folder contains the core RiftClaw OpenClaw skill (v0.1.1).
 4. `export PYTHONPATH=.`
 5. Test: `python3 -c "from skill.riftclaw import RiftClawSkill; skill = RiftClawSkill(); print(skill.get_status())"`
 
-See `examples.py` for usage demos.
 
 ## 🚀 Quick Start
 
