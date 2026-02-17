@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiftClaw - Lobby World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00d5ff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #00d5ff;
+            max-width: 350px;
+            z-index: 100;
+        }
+        
+        #ui h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00d5ff;
+        }
+        
+        #ui .status {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        #ui .connected {
+            color: #0f0;
+        }
+        
+        #ui .disconnected {
+            color: #f00;
+        }
+        
+        #ui .handoff {
+            color: #ff0;
+            animation: pulse 0.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        #log {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        #log .entry {
+            margin: 3px 0;
+            padding: 3px 0;
+        }
+        
+        #log .sent {
+            color: #0f0;
+        }
+        
+        #log .received {
+            color: #00d5ff;
+        }
+        
+        #log .error {
+            color: #f00;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #888;
+            font-size: 0.8rem;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #controls kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fff;
+        }
+        
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #000 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+        
+        #transition-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            font-size: 2rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 20px #00d5ff;
+        }
+        
+        #transition-text.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="ui">
+        <h1>🌌 Lobby World</h1>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div id="portal-status">Portal: <span style="color:#ff0">INACTIVE</span></div>
+        <div id="log"></div>
+    </div>
+    
+    <div id="controls">
+        <strong>Controls:</strong><br>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move<br>
+        <kbd>SPACE</kbd> - Jump<br>
+        <kbd>Click+Drag</kbd> - Rotate camera<br>
+        Walk into <span style="color:#00d5ff">cyan</span> portal → Arena<br>
+        Walk into <span style="color:#ff00ff">magenta</span> portal → Command Center
+    </div>
+    
+    <div id="transition-overlay"></div>
+    <div id="transition-text">
+        <div>🌀 Crossing the Rift...</div>
+        <div style="font-size:1rem;color:#888;margin-top:10px">Entering Arena World</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // RIFTCLAW THREE.JS DEMO - LOBBY WORLD
+        // ============================================
+        
+        // Global state
+        const state = {
+            connected: false,
+            ws: null,
+            agentId: null,
+            agentName: 'RiftWalker_ThreeJS',
+            inPortal: false,
+            handoffPending: false,
+            particles: []
+        };
+        
+        // UI Helpers
+        function log(msg, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type}] ${msg}`);
+        }
+        
+        function setStatus(text, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = `status ${className}`;
+        }
+        
+        function setPortalStatus(active) {
+            const portalEl = document.getElementById('portal-status');
+            portalEl.innerHTML = `Portal: <span style="color:${active ? '#0f0' : '#ff0'}">${active ? 'ACTIVE - WALK THROUGH!' : 'INACTIVE'}</span>`;
+        }
+        
+        // ============================================
+        // WEBSOCKET - RIFTCLAW PROTOCOL
+        // ============================================
+        
+        function connectToRelay() {
+            const relayUrl = 'ws://localhost:8765';
+            log(`Connecting to relay at ${relayUrl}...`);
+            
+            state.ws = new WebSocket(relayUrl);
+            
+            state.ws.onopen = () => {
+                log('Connected to relay!', 'received');
+                setStatus('Connected', 'connected');
+                state.connected = true;
+                
+                // Send discover after connection
+                setTimeout(sendDiscover, 500);
+            };
+            
+            state.ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleMessage(msg);
+                } catch (e) {
+                    log('Failed to parse message', 'error');
+                }
+            };
+            
+            state.ws.onclose = () => {
+                log('Disconnected from relay', 'error');
+                setStatus('Disconnected', 'disconnected');
+                state.connected = false;
+            };
+            
+            state.ws.onerror = (err) => {
+                log('WebSocket error', 'error');
+            };
+        }
+        
+        function sendMessage(type, payload = {}) {
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const msg = {
+                type,
+                agent_id: state.agentId,
+                timestamp: Date.now() / 1000,
+                ...payload
+            };
+            
+            state.ws.send(JSON.stringify(msg));
+            log(`Sent: ${type}`, 'sent');
+        }
+        
+        function handleMessage(msg) {
+            log(`Received: ${msg.type}`, 'received');
+            
+            switch (msg.type) {
+                case 'welcome':
+                    log(`Welcome to ${msg.world_name}`);
+                    break;
+                    
+                case 'discover_response':
+                    if (msg.portals && msg.portals.length > 0) {
+                        const portal = msg.portals[0];
+                        log(`Found portal: ${portal.name}`);
+                        setPortalStatus(true);
+                    }
+                    break;
+                    
+                case 'handoff_confirm':
+                    handleHandoffConfirm(msg);
+                    break;
+                    
+                case 'handoff_rejected':
+                    log(`Handoff rejected: ${msg.reason}`, 'error');
+                    state.handoffPending = false;
+                    break;
+                    
+                case 'error':
+                    log(`Error: ${msg.message}`, 'error');
+                    break;
+            }
+        }
+        
+        function sendDiscover() {
+            sendMessage('discover');
+        }
+        
+        function sendHandoffRequest(portalId) {
+            if (state.handoffPending) return;
+            
+            state.handoffPending = true;
+            log('Initiating portal handoff...');
+            
+            const passport = {
+                agent_id: state.agentId,
+                agent_name: state.agentName,
+                source_world: 'lobby',
+                target_world: 'arena',
+                position: { x: agentGroup.position.x, y: agentGroup.position.y, z: agentGroup.position.z },
+                inventory_hash: 'sha256:test',
+                memory_summary: 'Walking through the portal...',
+                reputation: 5.0,
+                timestamp: Date.now() / 1000,
+                nonce: Math.random().toString(36).substr(2, 9)
+            };
+            
+            sendMessage('handoff_request', {
+                portal_id: portalId,
+                passport
+            });
+        }
+        
+        function handleHandoffConfirm(msg) {
+            log('Handoff confirmed! Crossing the rift...');
+            
+            // Trigger transition animation
+            const overlay = document.getElementById('transition-overlay');
+            const text = document.getElementById('transition-text');
+            
+            overlay.classList.add('active');
+            text.classList.add('active');
+            
+            // Create particle burst
+            createParticleBurst(agentGroup.position);
+            
+            // Redirect after animation
+            setTimeout(() => {
+                window.location.href = 'arena.html';
+            }, 2000);
+        }
+        
+        // ============================================
+        // THREE.JS SCENE
+        // ============================================
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050510);
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 8);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        
+        // Portal glow light
+        const portalLight = new THREE.PointLight(0x00d5ff, 2, 20);
+        portalLight.position.set(0, 2, -5);
+        scene.add(portalLight);
+        
+        // ============================================
+        // ENVIRONMENT
+        // ============================================
+        
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x111122,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(50, 50, 0x00d5ff, 0x222244);
+        scene.add(gridHelper);
+        
+        // ============================================
+        // PORTAL
+        // ============================================
+        
+        const portalGroup = new THREE.Group();
+        portalGroup.position.set(0, 2, -5);
+        scene.add(portalGroup);
+        
+        // Portal ring (torus)
+        const torusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const torusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00d5ff,
+            emissive: 0x00d5ff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const portalRing = new THREE.Mesh(torusGeometry, torusMaterial);
+        portalGroup.add(portalRing);
+        
+        // Portal inner glow
+        const portalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const portalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00d5ff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const portalInner = new THREE.Mesh(portalInnerGeometry, portalInnerMaterial);
+        portalGroup.add(portalInner);
+        
+        // Outer glow ring
+        const glowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00d5ff,
+            transparent: true,
+            opacity: 0.2
+        });
+        const portalGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+        portalGroup.add(portalGlow);
+        
+               // Portal name label
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#00d5ff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+        
+        const portalLabel = createTextSprite('→ Arena World');
+        portalLabel.position.set(0, 3.5, 0);
+        portalGroup.add(portalLabel);
+        
+        // ============================================
+        // SECOND PORTAL - Command Center World
+        // ============================================
+        
+        const ccPortalGroup = new THREE.Group();
+        ccPortalGroup.position.set(8, 2, -3);
+        ccPortalGroup.rotation.y = -0.5;
+        scene.add(ccPortalGroup);
+        
+        // CC Portal ring (purple/magenta)
+        const ccTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const ccTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff00ff,
+            emissive: 0xff00ff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const ccPortalRing = new THREE.Mesh(ccTorusGeometry, ccTorusMaterial);
+        ccPortalGroup.add(ccPortalRing);
+        
+        // CC Portal inner
+        const ccPortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const ccPortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff00ff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const ccPortalInner = new THREE.Mesh(ccPortalInnerGeometry, ccPortalInnerMaterial);
+        ccPortalGroup.add(ccPortalInner);
+        
+        // CC Portal outer glow
+        const ccGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const ccGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff00ff,
+            transparent: true,
+            opacity: 0.2
+        });
+        const ccPortalGlow = new THREE.Mesh(ccGlowGeometry, ccGlowMaterial);
+        ccPortalGroup.add(ccPortalGlow);
+        
+        // CC Portal label
+        const ccPortalLabel = createTextSprite('→ Command Center');
+        ccPortalLabel.position.set(0, 3.5, 0);
+        ccPortalGroup.add(ccPortalLabel);
+        
+        // CC Portal particles (magenta)
+        function createCCPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xff00ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            ccPortalGroup.add(particles);
+            return particles;
+        }
+        
+        const ccPortalParticles = createCCPortalParticles();
+        
+        // ============================================
+        // AGENT (Player)
+        // ============================================
+        
+        // Agent body (cylinder + spheres for r128 compatibility)
+        const agentGroup = new THREE.Group();
+        agentGroup.position.y = 0; // Position so bottom sphere touches ground at y=0
+        scene.add(agentGroup);
+        
+        // Body (cylinder)
+        const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            roughness: 0.3,
+            metalness: 0.7
+        });
+        const agentBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        agentBody.position.y = 0.8;
+        agentBody.castShadow = true;
+        agentGroup.add(agentBody);
+        
+        // Top cap (sphere)
+        const topCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            bodyMaterial
+        );
+        topCap.position.y = 1.3;
+        agentGroup.add(topCap);
+        
+        // Bottom cap (sphere)
+        const bottomCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            bodyMaterial
+        );
+        bottomCap.position.y = 0.3;
+        agentGroup.add(bottomCap);
+        
+        // Agent glow
+        const agentGlow = new THREE.PointLight(0xff3333, 0.5, 3);
+        agentGlow.position.y = 0.8;
+        agentGroup.add(agentGlow);
+        
+        // ============================================
+        // PARTICLES
+        // ============================================
+        
+        function createPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            portalGroup.add(particles);
+            return particles;
+        }
+        
+        const portalParticles = createPortalParticles();
+        
+        function createParticleBurst(position) {
+            const burstCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(burstCount * 3);
+            const velocities = [];
+            
+            for (let i = 0; i < burstCount; i++) {
+                positions[i * 3] = position.x;
+                positions[i * 3 + 1] = position.y;
+                positions[i * 3 + 2] = position.z;
+                
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: (Math.random() - 0.5) * 0.5,
+                    z: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.1,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const burst = new THREE.Points(geometry, material);
+            scene.add(burst);
+            
+            state.particles.push({
+                mesh: burst,
+                velocities,
+                life: 60
+            });
+        }
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        const keys = {};
+        const agentSpeed = 0.1;
+        const agentVelocity = new THREE.Vector3();
+        let jumpVelocity = 0;
+        const gravity = -0.02;
+        const jumpStrength = 0.4;
+        let isGrounded = true;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && isGrounded) {
+                jumpVelocity = jumpStrength;
+                isGrounded = false;
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mouse look - click and drag
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.3;
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - previousMouseX;
+            const deltaY = e.clientY - previousMouseY;
+            
+            cameraAngleX -= deltaX * 0.005;
+            cameraAngleY += deltaY * 0.005; // Up/down look
+            
+            // Clamp vertical angle
+            cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
+            
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        function updateAgentMovement() {
+            const forward = new THREE.Vector3(0, 0, -1);
+            const right = new THREE.Vector3(1, 0, 0);
+            
+            forward.applyQuaternion(camera.quaternion);
+            right.applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            agentVelocity.set(0, 0, 0);
+            
+            if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyS']) agentVelocity.add(forward.multiplyScalar(-agentSpeed));
+            if (keys['KeyA']) agentVelocity.add(right.multiplyScalar(-agentSpeed));
+            if (keys['KeyD']) agentVelocity.add(right.multiplyScalar(agentSpeed));
+            
+            // Apply horizontal movement
+            agentGroup.position.x += agentVelocity.x;
+            agentGroup.position.z += agentVelocity.z;
+            
+            // Apply jump physics
+            agentGroup.position.y += jumpVelocity;
+            jumpVelocity += gravity;
+            
+            // Ground collision
+            if (agentGroup.position.y <= 0) {
+                agentGroup.position.y = 0;
+                jumpVelocity = 0;
+                isGrounded = true;
+            }
+            
+            // Camera follow with click-drag rotation
+            camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
+            camera.lookAt(agentGroup.position);
+        }
+        
+        // ============================================
+        // COLLISION DETECTION
+        // ============================================
+        
+        function checkPortalCollision() {
+            const agentPos = agentGroup.position.clone();
+            const portalRadius = 2.5;
+            
+            // Check Arena portal
+            const arenaPortalPos = portalGroup.position.clone();
+            const arenaDistance = agentPos.distanceTo(arenaPortalPos);
+            
+            if (arenaDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'arena';
+                log('Entered Arena portal!');
+                // Transition to arena
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                setTimeout(() => {
+                    window.location.href = 'arena.html';
+                }, 2000);
+                return;
+            }
+            
+            // Check Command Center portal
+            const ccPortalPos = ccPortalGroup.position.clone();
+            const ccDistance = agentPos.distanceTo(ccPortalPos);
+            
+            if (ccDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'command-center';
+                log('Entered Command Center portal!');
+                // Transition to command center
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🖥️ COMMAND CENTER</div><div style="font-size:1rem;color:#888;margin-top:10px">Entering Digital Realm</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                setTimeout(() => {
+                    window.location.href = 'command-center.html';
+                }, 2000);
+                return;
+            }
+            
+            // Reset portal state when far from both
+            if (arenaDistance >= portalRadius && ccDistance >= portalRadius) {
+                state.inPortal = false;
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate portal
+            portalRing.rotation.z += 0.01;
+            portalInner.rotation.z -= 0.005;
+            portalGlow.rotation.z += 0.02;
+            
+            // Animate particles
+            const positions = portalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                positions[i * 3 + 1] += 0.02;
+                if (positions[i * 3 + 1] > 1.5) {
+                    positions[i * 3 + 1] = -1.5;
+                }
+            }
+            portalParticles.geometry.attributes.position.needsUpdate = true;
+            portalParticles.rotation.y += 0.002;
+            
+            // Animate CC portal particles
+            const ccPositions = ccPortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                ccPositions[i * 3 + 1] += 0.02;
+                if (ccPositions[i * 3 + 1] > 1.5) {
+                    ccPositions[i * 3 + 1] = -1.5;
+                }
+            }
+            ccPortalParticles.geometry.attributes.position.needsUpdate = true;
+            ccPortalParticles.rotation.y += 0.002;
+            
+            // Update burst particles
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.life--;
+                
+                const pos = p.mesh.geometry.attributes.position.array;
+                for (let j = 0; j < p.velocities.length; j++) {
+                    pos[j * 3] += p.velocities[j].x;
+                    pos[j * 3 + 1] += p.velocities[j].y;
+                    pos[j * 3 + 2] += p.velocities[j].z;
+                }
+                p.mesh.geometry.attributes.position.needsUpdate = true;
+                p.mesh.material.opacity = p.life / 60;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    state.particles.splice(i, 1);
+                }
+            }
+            
+            // Update agent
+            updateAgentMovement();
+            
+            // Check collision
+            checkPortalCollision();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        // Generate agent ID
+        state.agentId = 'rift-' + Math.random().toString(36).substr(2, 9);
+        log(`Agent initialized: ${state.agentId}`);
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Start
+        connectToRelay();
+        animate();
+    </script>
+</body>
+</html>
