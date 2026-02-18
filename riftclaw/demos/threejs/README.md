@@ -4,13 +4,16 @@ The first visual portal crossing in a browser! This demo shows an AI agent (cont
 
 ## 🎮 What This Demo Shows
 
-- **Lobby World** (lobby.html): A cool blue cyber environment with TWO portals
+- **Lobby World** (lobby.html): A cool blue cyber environment with THREE portals
   - Cyan portal → Arena World
   - Magenta portal → Command Center World
+  - Green portal → Forest World
 - **Arena World** (arena.html): A warm red combat arena with platform and pillars
 - **Command Center World** (command-center.html): Cyber environment with matrix rain and holographic panels
+- **Forest World** (forest.html): Nature sanctuary with trees, grass, and fireflies
 - **Portal Crossing**: Walk into any portal to traverse between worlds
 - **Particle Effects**: Visual burst when crossing, floating elements
+- **Audio**: Procedural sound effects (footsteps, portal entry) per world
 - **WebSocket Protocol**: Real RiftClaw protocol messages sent to relay server
 
 ## 🚀 Quick Start
@@ -227,9 +230,10 @@ const agentSpeed = 0.1;  // Increase for faster movement
 
 ```
 demos/threejs/
-├── lobby.html          # Hub world with two portals
+├── lobby.html          # Hub world with three portals
 ├── arena.html          # Combat arena (red/orange)
 ├── command-center.html # Cyber environment with matrix rain
+├── forest.html         # Nature sanctuary (green)
 └── README.md           # This file
 ```
 
