@@ -2200,6 +2200,114 @@
         
         // Spawn storage chest
         spawnStorageChest(scene);
+
+        // ============================================
+        // VERSION MONUMENT - UNIQUE MARKER FOR v2.0
+        // ============================================
+        const versionMonument = new THREE.Group();
+        versionMonument.position.set(0, 0, 0);
+        scene.add(versionMonument);
+
+        // Central pillar
+        const pillarGeo = new THREE.CylinderGeometry(0.5, 0.8, 12, 8);
+        const pillarMat = new THREE.MeshBasicMaterial({
+            color: 0xffd700,
+            transparent: true,
+            opacity: 0.6,
+            wireframe: true
+        });
+        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+        pillar.position.y = 6;
+        versionMonument.add(pillar);
+
+        // Inner core glow
+        const coreGeo = new THREE.CylinderGeometry(0.3, 0.3, 11, 6);
+        const coreMat = new THREE.MeshBasicMaterial({
+            color: 0xffd700,
+            transparent: true,
+            opacity: 0.8
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.position.y = 6;
+        versionMonument.add(core);
+
+        // Floating rings
+        const ringGeo1 = new THREE.TorusGeometry(1.2, 0.05, 8, 32);
+        const ringMat1 = new THREE.MeshBasicMaterial({ color: 0x00d5ff, transparent: true, opacity: 0.9 });
+        const ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+        ring1.position.y = 8;
+        versionMonument.add(ring1);
+
+        const ringGeo2 = new THREE.TorusGeometry(1.5, 0.05, 8, 32);
+        const ringMat2 = new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.9 });
+        const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+        ring2.position.y = 6;
+        versionMonument.add(ring2);
+
+        const ringGeo3 = new THREE.TorusGeometry(1.2, 0.05, 8, 32);
+        const ringMat3 = new THREE.MeshBasicMaterial({ color: 0x00d5ff, transparent: true, opacity: 0.9 });
+        const ring3 = new THREE.Mesh(ringGeo3, ringMat3);
+        ring3.position.y = 4;
+        versionMonument.add(ring3);
+
+        // Version text sprite
+        function createVersionSprite() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // Glow effect
+            ctx.shadowColor = '#ffd700';
+            ctx.shadowBlur = 20;
+            
+            // Text
+            ctx.font = 'bold 60px Arial';
+            ctx.fillStyle = '#ffd700';
+            ctx.textAlign = 'center';
+            ctx.fillText('★ RIFTCLAW v2.0 ★', 256, 50);
+            
+            ctx.font = '30px Arial';
+            ctx.fillStyle = '#00d5ff';
+            ctx.fillText('FEB 2025 BUILD', 256, 95);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), material);
+            return sprite;
+        }
+
+        const versionLabel = createVersionSprite();
+        versionLabel.position.set(0, 13, 0);
+        versionMonument.add(versionLabel);
+
+        // Particle fountain
+        const fountainGeo = new THREE.BufferGeometry();
+        const fountainCount = 100;
+        const fountainPos = new Float32Array(fountainCount * 3);
+        const fountainVel = [];
+        for (let i = 0; i < fountainCount; i++) {
+            fountainPos[i * 3] = 0;
+            fountainPos[i * 3 + 1] = 0;
+            fountainPos[i * 3 + 2] = 0;
+            fountainVel.push({
+                x: (Math.random() - 0.5) * 0.1,
+                y: Math.random() * 0.2 + 0.1,
+                z: (Math.random() - 0.5) * 0.1
+            });
+        }
+        fountainGeo.setAttribute('position', new THREE.BufferAttribute(fountainPos, 3));
+        const fountainMat = new THREE.PointsMaterial({
+            color: 0xffd700,
+            size: 0.15,
+            transparent: true,
+            opacity: 0.8
+        });
+        const fountain = new THREE.Points(fountainGeo, fountainMat);
+        versionMonument.add(fountain);
+
+        // Store for animation
+        versionMonument.userData = { ring1, ring2, ring3, fountain, fountainVel };
         
         // ============================================
         // ANIMATION LOOP
@@ -2278,6 +2386,41 @@
             }
             waterPortalParticles.geometry.attributes.position.needsUpdate = true;
             waterPortalParticles.rotation.y += 0.002;
+
+            // Animate Version Monument
+            if (versionMonument && versionMonument.userData) {
+                const { ring1, ring2, ring3, fountain, fountainVel } = versionMonument.userData;
+                
+                // Rotate rings at different speeds
+                ring1.rotation.x += 0.01;
+                ring1.rotation.y += 0.02;
+                ring2.rotation.x -= 0.015;
+                ring2.rotation.z += 0.01;
+                ring3.rotation.y -= 0.025;
+                ring3.rotation.x += 0.008;
+                
+                // Animate particle fountain
+                const fPos = fountain.geometry.attributes.position.array;
+                for (let i = 0; i < 100; i++) {
+                    fPos[i * 3] += fountainVel[i].x;
+                    fPos[i * 3 + 1] += fountainVel[i].y;
+                    fPos[i * 3 + 2] += fountainVel[i].z;
+                    
+                    // Reset particles that go too high
+                    if (fPos[i * 3 + 1] > 12) {
+                        fPos[i * 3] = 0;
+                        fPos[i * 3 + 1] = 0;
+                        fPos[i * 3 + 2] = 0;
+                    }
+                }
+                fountain.geometry.attributes.position.needsUpdate = true;
+                
+                // Pulse pillar opacity
+                pillar.material.opacity = 0.4 + Math.sin(Date.now() * 0.001) * 0.2;
+                
+                // Rotate version label to face camera
+                versionLabel.lookAt(camera.position);
+            }
             
             // Update burst particles
             for (let i = state.particles.length - 1; i >= 0; i--) {
