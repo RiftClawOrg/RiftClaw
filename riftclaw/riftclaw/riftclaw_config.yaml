@@ -7,8 +7,7 @@ agent_name: "RiftWalker_Alpha"
 
 # Default World Connection
 # Using echo server for testing - replace with real world in production
-#default_world: "wss://echo.websocket.org"
-default_world: "wss://rift-claw--riftclaw.replit.app"
+default_world: "wss://echo.websocket.org"
 
 # Connection Settings
 connection_timeout: 30
@@ -27,3 +26,4 @@ security:
   require_signatures: true      # Reject unsigned handoffs
   verify_destinations: true     # Validate destination world identities
   key_path: "./keys/agent.key"  # Path to Ed25519 private key
+

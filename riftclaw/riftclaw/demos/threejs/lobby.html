@@ -239,8 +239,6 @@
         <strong>Controls:</strong><br>
         <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move<br>
         <kbd>SPACE</kbd> - Jump<br>
-        <kbd>I</kbd> - Inventory<br>
-        <kbd>O</kbd> - Return to previous world<br>
         <kbd>Click+Drag</kbd> - Rotate camera<br>
         Walk into <span style="color:#ff3333">red</span> portal → Arena<br>
         Walk into <span style="color:#ff00ff">magenta</span> portal → Cyb3r World<br>
@@ -975,7 +973,7 @@
         // ============================================
         
         function connectToRelay() {
-            const relayUrl = 'wss://rift-claw--riftclaw.replit.app';
+            const relayUrl = 'ws://localhost:8765';
             log(`Connecting to relay at ${relayUrl}...`);
             
             state.ws = new WebSocket(relayUrl);
@@ -984,13 +982,6 @@
                 log('Connected to relay!', 'received');
                 setStatus('Connected', 'connected');
                 state.connected = true;
-                
-                // Register this world
-                sendMessage('register_world', {
-                    world_name: 'lobby',
-                    world_url: window.location.href,
-                    display_name: 'Replit Lobby'
-                });
                 
                 // Send discover after connection
                 setTimeout(sendDiscover, 500);
@@ -1049,11 +1040,6 @@
                     }
                     break;
                     
-                case 'handoff_request':
-                    // Incoming from Minecraft!
-                    handleIncomingHandoff(msg);
-                    break;
-                    
                 case 'handoff_confirm':
                     handleHandoffConfirm(msg);
                     break;
@@ -1063,152 +1049,10 @@
                     state.handoffPending = false;
                     break;
                     
-                case 'register_confirm':
-                    log(`Registered as world: ${msg.world_name}`);
-                    break;
-                    
                 case 'error':
                     log(`Error: ${msg.message}`, 'error');
                     break;
             }
-        }
-        
-        function handleIncomingHandoff(msg) {
-            const passport = msg.passport;
-            if (!passport) {
-                log('Invalid handoff - no passport', 'error');
-                return;
-            }
-            
-            // Save source for return
-            localStorage.setItem('riftclaw_source_world', passport.source_world || 'unknown');
-            localStorage.setItem('riftclaw_source_url', passport.source_url || '');
-            log(`📍 Source saved for return: ${passport.source_world}`, 'info');
-            
-            // Show arrival message
-            const overlay = document.getElementById('transition-overlay');
-            const text = document.getElementById('transition-text');
-            
-            const isFromMinecraft = passport.source_world === 'minecraft-overworld';
-            const title = isFromMinecraft ? '🎮 MINECRAFT TRAVELER ARRIVING' : '🌀 TRAVELER ARRIVING';
-            
-            text.innerHTML = `
-                <div>${title}</div>
-                <div style="font-size:1rem;color:#888;margin-top:10px">Welcome, ${passport.agent_name || 'RiftWalker'}!</div>
-                <div style="font-size:0.8rem;color:#666;margin-top:5px">Press 'O' to return</div>
-            `;
-            overlay.classList.add('active');
-            text.classList.add('active');
-            
-            // Sync inventory from incoming world
-            if (passport.inventory) {
-                try {
-                    inventory.fromJSON(passport.inventory);
-                    log(`Received inventory from ${passport.source_world}`, 'received');
-                    inventory.updateUI();
-                } catch (e) {
-                    log('Error parsing inventory: ' + e.message, 'error');
-                }
-            }
-            
-            // Send confirm
-            sendMessage('handoff_confirm', {
-                portal_id: msg.portal_id,
-                passport: passport
-            });
-            
-            // Hide overlay after delay
-            setTimeout(() => {
-                overlay.classList.remove('active');
-                text.classList.remove('active');
-            }, 3000);
-        }
-                overlay.classList.remove('active');
-                text.classList.remove('active');
-            }, 3000);
-        }
-        
-        function convertMinecraftItem(mcItem) {
-            // Map Minecraft items to RiftClaw items
-            const itemMap = {
-                'minecraft:diamond': { name: 'Portal Shard', icon: '💎', type: 'material' },
-                'minecraft:emerald': { name: 'Data Crystal', icon: '💾', type: 'tech' },
-                'minecraft:gold_ingot': { name: 'Hub Token', icon: '🪙', type: 'token' },
-                'minecraft:iron_ingot': { name: 'Relay Fragment', icon: '📡', type: 'material' },
-                'minecraft:amethyst_shard': { name: 'Neon Keycard', icon: '🗝️', type: 'key' },
-                'minecraft:redstone': { name: 'Glitch Fragment', icon: '💿', type: 'material' },
-                'minecraft:lapis_lazuli': { name: 'Binary Code', icon: '💻', type: 'data' },
-                'minecraft:quartz': { name: 'Star Dust', icon: '✨', type: 'material' },
-                'minecraft:ender_pearl': { name: 'Void Crystal', icon: '🔮', type: 'magic' },
-                'minecraft:oak_log': { name: 'Druid Staff', icon: '🪵', type: 'weapon' },
-                'minecraft:wheat_seeds': { name: 'Ancient Seed', icon: '🌱', type: 'material' },
-                'minecraft:apple': { name: 'Mushroom Cap', icon: '🍄', type: 'food' }
-            };
-            
-            const mapping = itemMap[mcItem.item];
-            if (mapping) {
-                return {
-                    id: Date.now().toString() + Math.random(),
-                    name: mapping.name,
-                    icon: mapping.icon,
-                    type: mapping.type,
-                    quantity: mcItem.quantity || 1,
-                    world: 'minecraft'
-                };
-            }
-            
-            // Generic fallback
-            return {
-                id: Date.now().toString() + Math.random(),
-                name: mcItem.name || 'Mystery Item',
-                icon: '📦',
-                type: 'material',
-                quantity: mcItem.quantity || 1,
-                world: 'minecraft'
-            };
-        }
-        
-        function openReturnPortal(targetWorld, targetUrl) {
-            if (state.handoffPending) return;
-            
-            log(`Opening return portal to ${targetWorld}...`);
-            state.handoffPending = true;
-            
-            const overlay = document.getElementById('transition-overlay');
-            const text = document.getElementById('transition-text');
-            text.innerHTML = `
-                <div>🌀 RETURNING</div>
-                <div style="font-size:1rem;color:#888;margin-top:10px">To ${targetWorld}</div>
-            `;
-            overlay.classList.add('active');
-            text.classList.add('active');
-            
-            // Send handoff back
-            const passport = {
-                agent_id: state.agentId,
-                agent_name: state.agentName,
-                source_world: 'lobby',
-                source_url: window.location.href,
-                target_world: targetWorld,
-                target_url: targetUrl,
-                position: { x: agentGroup.position.x, y: agentGroup.position.y, z: agentGroup.position.z },
-                inventory: inventory.toJSON(),
-                inventory_hash: btoa(inventory.toJSON()).substr(0, 16),
-                memory_summary: `Returning from Lobby to ${targetWorld}`,
-                reputation: 5.0,
-                timestamp: Date.now() / 1000,
-                nonce: Math.random().toString(36).substr(2, 9)
-            };
-            
-            sendMessage('handoff_request', {
-                portal_id: 'return-portal',
-                passport
-            });
-            
-            // Redirect after delay
-            setTimeout(() => {
-                window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
-            }, 2000);
         }
         
         function sendDiscover() {
@@ -1221,20 +1065,11 @@
             state.handoffPending = true;
             log('Initiating portal handoff...');
             
-            // Save current location for return
-            localStorage.setItem('riftclaw_source_world', 'lobby');
-            localStorage.setItem('riftclaw_source_url', window.location.href);
-            
-            const targetWorld = state.targetWorld || 'arena';
-            const targetUrl = getTargetUrl(targetWorld);
-            
             const passport = {
                 agent_id: state.agentId,
                 agent_name: state.agentName,
                 source_world: 'lobby',
-                source_url: window.location.href,
-                target_world: targetWorld,
-                target_url: targetUrl,
+                target_world: state.targetWorld || 'arena',
                 position: { x: agentGroup.position.x, y: agentGroup.position.y, z: agentGroup.position.z },
                 inventory: inventory.toJSON(),
                 inventory_hash: btoa(inventory.toJSON()).substr(0, 16),
@@ -1248,20 +1083,6 @@
                 portal_id: portalId,
                 passport
             });
-        }
-        
-        function getTargetUrl(targetWorld) {
-            // Map world names to URLs
-            const worldUrls = {
-                'arena': 'arena.html',
-                'cyb3r': 'cyb3r-world.html',
-                'forest': 'forest.html',
-                'space': 'space-station.html',
-                'moon': 'moon.html',
-                'water': 'water-world.html',
-                'limbo': 'limbo.html'
-            };
-            return worldUrls[targetWorld] || targetWorld + '.html';
         }
         
         function handleHandoffConfirm(msg) {
@@ -1280,12 +1101,9 @@
             // Create particle burst
             createParticleBurst(agentGroup.position);
             
-            // Redirect to target URL from passport
-            const passport = msg.passport;
-            const targetUrl = passport?.target_url || getTargetUrl(state.targetWorld || 'arena');
-            
+            // Redirect after animation
             setTimeout(() => {
-                window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
+                window.location.href = 'arena.html?inventory=' + encodeURIComponent(inventory.toJSON());
             }, 2000);
         }
         
@@ -1926,16 +1744,6 @@
             }
             if (e.code === 'KeyI') {
                 inventory.toggle();
-            }
-            if (e.code === 'KeyO') {
-                // Open return portal if we have a source world
-                const sourceWorld = localStorage.getItem('riftclaw_source_world');
-                const sourceUrl = localStorage.getItem('riftclaw_source_url');
-                if (sourceWorld && sourceUrl) {
-                    openReturnPortal(sourceWorld, sourceUrl);
-                } else {
-                    log('No return destination set. Walk through a portal first!', 'error');
-                }
             }
         });
         

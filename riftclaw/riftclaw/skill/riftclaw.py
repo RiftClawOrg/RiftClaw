@@ -91,7 +91,6 @@ class AgentPassport:
     target_world: str
     position: Dict[str, float] = field(default_factory=dict)
     inventory_hash: str = ""
-    inventory: str = ""  # JSON string of items for cross-world sync
     memory_summary: str = ""
     reputation: float = 1.0
     timestamp: float = field(default_factory=time.time)
@@ -107,7 +106,6 @@ class AgentPassport:
             "target_world": self.target_world,
             "position": self.position,
             "inventory_hash": self.inventory_hash,
-            "inventory": self.inventory,
             "memory_summary": self.memory_summary,
             "reputation": self.reputation,
             "timestamp": self.timestamp,
@@ -168,7 +166,7 @@ class RiftClawSkill:
     DEFAULT_CONFIG = {
         'agent_id': None,  # Auto-generated if not provided
         'agent_name': 'RiftWalker',
-        'default_world': None,
+        'default_world': 'wss://echo.websocket.org',
         'connection_timeout': 30,
         'handoff_timeout': 60,
         'auto_reconnect': True,
@@ -234,19 +232,10 @@ class RiftClawSkill:
         Initialize the RiftClaw skill.
         
         Args:
-            config_path: Path to YAML configuration file (auto-detected if None)
+            config_path: Path to YAML configuration file
         """
-        # Auto-detect config if not provided
-        if config_path is None:
-            config_path = self._find_config_file()
-        
         self.config = self.load_config(config_path)
         self._setup_logging()
-        
-        # Debug: Print loaded config
-        print(f"[RiftClaw] Loaded default_world: {self.config.get('default_world')}")
-        print(f"[RiftClaw] Config path used: {config_path or 'None (using defaults)'}")
-        logger.info(f"Loaded default_world: {self.config.get('default_world')}")
         
         # Generate agent ID if not provided
         if not self.config.get('agent_id'):
@@ -279,37 +268,6 @@ class RiftClawSkill:
         level = getattr(logging, self.config.get('log_level', 'INFO').upper())
         logger.setLevel(level)
     
-    def _find_config_file(self) -> Optional[str]:
-        """
-        Auto-detect config file in common locations.
-        
-        Searches in order:
-        1. ./riftclaw_config.yaml
-        2. ~/.config/riftclaw/config.yaml
-        3. /etc/riftclaw/config.yaml
-        
-        Returns:
-            Path to first found config file, or None
-        """
-        search_paths = [
-            Path('riftclaw_config.yaml'),
-            Path.home() / '.config' / 'riftclaw' / 'config.yaml',
-            Path('/etc/riftclaw/config.yaml'),
-            Path(__file__).parent.parent / 'riftclaw_config.yaml',
-            Path(__file__).parent / 'riftclaw_config.yaml',
-        ]
-        
-        print(f"[RiftClaw] Searching for config file...")
-        for path in search_paths:
-            abs_path = path.absolute()
-            print(f"[RiftClaw] Checking: {abs_path}")
-            if path.exists():
-                print(f"[RiftClaw] ✓ Found config at: {abs_path}")
-                return str(path)
-        
-        print(f"[RiftClaw] ✗ No config file found in search paths")
-        return None
-    
     def load_config(self, config_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Load configuration from YAML file with default fallback.
@@ -321,16 +279,13 @@ class RiftClawSkill:
             Merged configuration dictionary
         """
         config = self.DEFAULT_CONFIG.copy()
-        print(f"[RiftClaw] Starting with default config. default_world = {config.get('default_world')}")
         
         if config_path and yaml:
             try:
                 path = Path(config_path)
-                print(f"[RiftClaw] Looking for config at: {path.absolute()}")
                 if path.exists():
                     with open(path, 'r') as f:
                         user_config = yaml.safe_load(f)
-                        print(f"[RiftClaw] YAML loaded: {user_config}")
                         if user_config:
                             # Deep merge for nested dicts
                             for key, value in user_config.items():
@@ -338,19 +293,13 @@ class RiftClawSkill:
                                     config[key].update(value)
                                 else:
                                     config[key] = value
-                            print(f"[RiftClaw] Config merged. default_world now = {config.get('default_world')}")
                     logger.info(f"Loaded config from {config_path}")
                 else:
-                    print(f"[RiftClaw] WARNING: Config file not found at {path.absolute()}")
                     logger.warning(f"Config file not found: {config_path}")
             except Exception as e:
-                print(f"[RiftClaw] ERROR loading config: {e}")
                 logger.error(f"Failed to load config: {e}")
         elif config_path and not yaml:
-            print("[RiftClaw] WARNING: PyYAML not installed, using default config")
             logger.warning("PyYAML not installed, using default config")
-        else:
-            print("[RiftClaw] No config path provided, using defaults")
         
         return config
     
@@ -510,14 +459,7 @@ class RiftClawSkill:
         target_url = url or self.config.get('default_world')
         
         if not target_url:
-            raise ConnectionError(
-                f"No world URL provided.\n"
-                f"Options:\n"
-                f"  1. Pass 'url' parameter: skill.connect(url='wss://...')\n"
-                f"  2. Create 'riftclaw_config.yaml' with 'default_world: wss://...'\n"
-                f"  3. Pass config path: RiftClawSkill(config_path='/path/to/config.yaml')\n"
-                f"Current default_world: {self.config.get('default_world')}"
-            )
+            raise ConnectionError("No world URL provided")
         
         self.state = PortalState.CONNECTING
         logger.info(f"Connecting to {target_url}...")
@@ -951,3 +893,4 @@ if __name__ == '__main__':
             skill.disconnect()
     
     print("\nRiftClaw ready for portal traversal.")
+ 

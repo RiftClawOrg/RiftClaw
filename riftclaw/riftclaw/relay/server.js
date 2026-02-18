@@ -103,34 +103,6 @@ const rateLimiter = new RateLimiter(
 
 // Message handlers
 const handlers = {
-  // World registration (new!)
-  register_world(ws, message) {
-    const conn = connections.get(ws);
-    if (!conn) return;
-    
-    const { world_name, world_url, display_name } = message;
-    
-    console.log(`[Register] World '${world_name}' registering from ${conn.id}`);
-    
-    // Store world connection
-    worlds.set(world_name, {
-      ws: ws,
-      url: world_url,
-      displayName: display_name || world_name,
-      registeredAt: Date.now()
-    });
-    
-    conn.worldName = world_name;
-    conn.isWorld = true;
-    
-    ws.send(createMessage('register_confirm', {
-      world_name: world_name,
-      status: 'registered'
-    }));
-    
-    console.log(`[Register] World '${world_name}' now available for discovery`);
-  },
-
   // Agent requesting portal list
   discover(ws, message) {
     const conn = connections.get(ws);
@@ -138,41 +110,23 @@ const handlers = {
 
     console.log(`[Discover] Agent ${message.agent_id} discovering portals`);
     
-    // Build portal list from registered worlds AND config worlds
+    // Build portal list from known worlds
     const portals = [];
-    
-    // Add registered worlds
-    worlds.forEach((worldData, worldId) => {
-      if (worldData.ws.readyState === WebSocket.OPEN) {
-        portals.push({
-          portal_id: `portal_${worldId}_01`,
-          name: worldData.displayName || `${worldId} Gateway`,
-          destination_world: worldId,
-          destination_url: worldData.url,
-          position: { x: 0, y: 0, z: 0 },
-          requires_auth: false,
-          metadata: { registered: true }
-        });
-      }
-    });
-    
-    // Add config worlds (for backwards compatibility)
-    Object.entries(config.worlds).forEach(([worldId, worldUrl]) => {
-      // Skip if already registered
-      if (!worlds.has(worldId)) {
+    worlds.forEach((worldConn, worldId) => {
+      if (worldConn.readyState === WebSocket.OPEN) {
         portals.push({
           portal_id: `portal_${worldId}_01`,
           name: `${worldId} Gateway`,
           destination_world: worldId,
-          destination_url: worldUrl,
+          destination_url: config.worlds[worldId],
           position: { x: 0, y: 0, z: 0 },
           requires_auth: false,
-          metadata: { fromConfig: true }
+          metadata: {}
         });
       }
     });
 
-    // Add echo test portal if no worlds available
+    // Add echo test portal if no worlds configured
     if (portals.length === 0) {
       portals.push({
         portal_id: "portal_echo_test",
@@ -185,10 +139,7 @@ const handlers = {
       });
     }
 
-    ws.send(createMessage('discover_response', { 
-      portals,
-      registered_worlds: worlds.size
-    }));
+    ws.send(createMessage('discover_response', { portals }));
   },
 
   // Agent requesting handoff to another world
@@ -197,57 +148,54 @@ const handlers = {
     if (!conn) return;
 
     const { portal_id, passport } = message;
-    const targetWorld = passport?.target_world;
+    console.log(`[Handoff] Agent ${message.agent_id} requesting entry to ${portal_id}`);
+
+    // Extract world ID from portal_id (portal_<world>_01)
+    const worldId = portal_id.replace('portal_', '').replace(/_\d+$/, '');
     
-    console.log(`[Handoff] Agent ${message.agent_id} requesting entry to ${targetWorld || portal_id}`);
-
-    // Check if target world is registered
-    if (targetWorld && worlds.has(targetWorld)) {
-      const worldData = worlds.get(targetWorld);
-      
-      // Forward handoff to target world
-      try {
-        worldData.ws.send(createMessage('handoff_request', {
-          portal_id: portal_id,
-          passport: passport,
-          from_agent: message.agent_id
-        }));
-        
-        console.log(`[Handoff] Forwarded to registered world '${targetWorld}'`);
-        
-        // Wait for response (in a real implementation, we'd track this)
-        setTimeout(() => {
-          ws.send(createMessage('handoff_confirm', {
-            passport: passport,
-            target_url: worldData.url
-          }));
-        }, 500);
-        
-        return;
-      } catch (e) {
-        console.error(`[Handoff] Error forwarding to ${targetWorld}:`, e.message);
-      }
-    }
-
     // Check if this is the echo test portal
     if (portal_id === 'portal_echo_test') {
       console.log(`[Handoff] Routing to echo test server`);
       
+      // Simulate handoff to echo server
       setTimeout(() => {
         ws.send(createMessage('handoff_confirm', {
-          passport: passport,
-          target_url: 'wss://echo.websocket.org'
+          new_pos: { x: 0, y: 1, z: 0 },
+          granted_capabilities: ['movement', 'chat'],
+          world_state_hash: 'sha256:test'
         }));
       }, 500);
       
       return;
     }
 
-    // Unknown destination
-    ws.send(createMessage('handoff_rejected', {
-      reason: 'unknown_destination',
-      details: `World '${targetWorld}' not found in relay registry`
-    }));
+    // Check if world is known
+    if (!config.worlds[worldId]) {
+      ws.send(createMessage('handoff_rejected', {
+        reason: 'unknown_destination',
+        details: `World '${worldId}' not found in relay registry`
+      }));
+      return;
+    }
+
+    // Try to forward to destination world
+    const destUrl = config.worlds[worldId];
+    console.log(`[Handoff] Forwarding passport to ${destUrl}`);
+
+    // In a full implementation, this would:
+    // 1. Open connection to destination world
+    // 2. Send the passport
+    // 3. Wait for confirmation
+    // 4. Relay response back to agent
+
+    // For now, simulate success
+    setTimeout(() => {
+      ws.send(createMessage('handoff_confirm', {
+        new_pos: { x: 5, y: 1, z: 0 },
+        granted_capabilities: ['movement', 'inventory', 'trade'],
+        world_state_hash: `sha256:${Date.now()}`
+      }));
+    }, 1000);
   },
 
   // Default handler for unknown types
@@ -360,13 +308,6 @@ wss.on('connection', (ws, req) => {
     if (conn?.agentId) {
       agentSessions.delete(conn.agentId);
     }
-    
-    // Clean up registered world
-    if (conn?.worldName) {
-      worlds.delete(conn.worldName);
-      console.log(`[Disconnect] World '${conn.worldName}' unregistered`);
-    }
-    
     rateLimiter.remove(ws);
     connections.delete(ws);
   });
@@ -397,13 +338,8 @@ setInterval(() => {
   const stats = {
     connections: connections.size,
     agents: agentSessions.size,
-    worlds: worlds.size,
     uptime: process.uptime()
   };
-  console.log(`[Stats] Connections: ${stats.connections}, Agents: ${stats.agents}, Worlds: ${stats.worlds}, Uptime: ${Math.floor(stats.uptime)}s`);
-  
-  // List registered worlds
-  if (worlds.size > 0) {
-    console.log(`[Worlds] Registered: ${Array.from(worlds.keys()).join(', ')}`);
-  }
+  console.log(`[Stats] Connections: ${stats.connections}, Agents: ${stats.agents}, Uptime: ${Math.floor(stats.uptime)}s`);
 }, 60000);
+ 
