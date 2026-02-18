@@ -153,9 +153,38 @@
         #arrival-text.active {
             opacity: 1;
         }
+        
+        #inventory-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff3333;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #ff3333;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(255, 51, 51, 0.3);
+        }
+        
+        #inventory-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <div id="inventory-panel">
+        <h3>🎒 Inventory</h3>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
+        <div id="inventory"><div style="color:#666">Empty</div></div>
+    </div>
     <div id="canvas-container"></div>
     
     <div id="ui">
@@ -175,8 +204,8 @@
     
     <div id="arrival-overlay"></div>
     <div id="arrival-text">
-        <div>🌌 ARRIVAL</div>
-        <div style="font-size:1rem;color:#888;margin-top:10px">Arena World</div>
+        <div>🌌 ARENA WORLD</div>
+        <div style="font-size:1rem;color:#888;margin-top:10px">Combat Zone</div>
     </div>
 
     <!-- Three.js -->
@@ -186,6 +215,319 @@
         // ============================================
         // RIFTCLAW THREE.JS DEMO - ARENA WORLD
         // ============================================
+        
+        // ============================================
+        // INVENTORY SYSTEM
+        // ============================================
+        
+        const inventory = {
+            items: [],
+            maxSlots: 8,
+            
+            add(item) {
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    existing.quantity += item.quantity || 1;
+                    this.save();
+                    this.updateUI();
+                    return true;
+                }
+                if (this.items.length >= this.maxSlots) return false;
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: item.quantity || 1,
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    return item;
+                }
+                return null;
+            },
+            
+            get() { return this.items; },
+            toJSON() { return JSON.stringify(this.items); },
+            fromJSON(json) {
+                try { this.items = JSON.parse(json) || []; } catch(e) { this.items = []; }
+            },
+            save() { localStorage.setItem('riftclaw_inventory', this.toJSON()); },
+            load() {
+                const saved = localStorage.getItem('riftclaw_inventory');
+                if (saved) this.fromJSON(saved);
+                const urlParams = new URLSearchParams(window.location.search);
+                const handoffInv = urlParams.get('inventory');
+                if (handoffInv) {
+                    this.fromJSON(decodeURIComponent(handoffInv));
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+                this.consolidate();
+                this.updateUI();
+            },
+            
+            consolidate() {
+                const consolidated = [];
+                this.items.forEach(item => {
+                    const existing = consolidated.find(i => i.name === item.name);
+                    if (existing) {
+                        existing.quantity += item.quantity;
+                    } else {
+                        consolidated.push({...item});
+                    }
+                });
+                this.items = consolidated;
+                this.save();
+            },
+            
+            updateUI() {
+                const invEl = document.getElementById('inventory');
+                if (invEl) {
+                    if (this.items.length === 0) {
+                        invEl.innerHTML = '<div style="color:#666">Empty</div>';
+                    } else {
+                        invEl.innerHTML = this.items.map((item, index) => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.4);border-radius:4px;margin:4px 0;border:1px solid rgba(255,51,51,0.2);">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1">${item.name}</span>
+                                <span style="color:#888;margin-right:8px;">x${item.quantity}</span>
+                                <button onclick="inventory.dropByName('${item.name}')" style="background:#ff3333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;">🗑️</button>
+                            </div>
+                        `).join('');
+                    }
+                }
+            },
+            
+            dropByName(itemName) {
+                const idx = this.items.findIndex(i => i.name === itemName);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Dropped ${item.name}`);
+                    this.toggle();
+                }
+            },
+            
+            toggle() {
+                const panel = document.getElementById('inventory-panel');
+                if (panel) {
+                    const isHidden = panel.style.display === 'none';
+                    panel.style.display = isHidden ? 'block' : 'none';
+                }
+            }
+        };
+        
+        inventory.load();
+        
+        // ============================================
+        // WORLD ITEMS SYSTEM
+        // ============================================
+        
+        const worldItems = {
+            arena: [
+                { id: 'arena_1', name: 'Combat Chip', type: 'tech', icon: '🧠', world: 'arena', x: 4, z: 4, collected: false },
+                { id: 'arena_2', name: 'Victory Medal', type: 'token', icon: '🏅', world: 'arena', x: -4, z: 4, collected: false },
+                { id: 'arena_3', name: 'Plasma Core', type: 'material', icon: '⚡', world: 'arena', x: 4, z: -4, collected: false },
+                { id: 'arena_4', name: 'Battle Trophy', type: 'trophy', icon: '🏆', world: 'arena', x: -4, z: -4, collected: false },
+                { id: 'arena_5', name: 'Arena Key', type: 'key', icon: '🗝️', world: 'arena', x: 0, z: 6, collected: false }
+            ]
+        };
+        
+        let itemMeshes = [];
+        
+        function loadWorldItems() {
+            const saved = localStorage.getItem('riftclaw_world_items');
+            if (saved) {
+                const data = JSON.parse(saved);
+                Object.assign(worldItems, data);
+            }
+        }
+        
+        function saveWorldItems() {
+            localStorage.setItem('riftclaw_world_items', JSON.stringify(worldItems));
+        }
+        
+        function spawnWorldItems(scene) {
+            loadWorldItems();
+            const worldName = 'arena';
+            if (!worldItems[worldName]) return;
+            
+            const createGeometry = (type) => {
+                switch(type) {
+                    case 'tech': return new THREE.IcosahedronGeometry(0.3, 0);
+                    case 'token': return new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+                    case 'material': return new THREE.DodecahedronGeometry(0.3, 0);
+                    case 'trophy': return new THREE.ConeGeometry(0.3, 0.6, 8);
+                    case 'key': return new THREE.TorusGeometry(0.25, 0.1, 8, 16);
+                    default: return new THREE.OctahedronGeometry(0.3, 0);
+                }
+            };
+            
+            worldItems[worldName].forEach(item => {
+                if (item.collected) return;
+                const geometry = createGeometry(item.type);
+                const material = new THREE.MeshBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.8 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(item.x, 1.5, item.z);
+                mesh.userData = { itemId: item.id, itemData: item };
+                
+                const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = -0.3;
+                mesh.add(ring);
+                
+                scene.add(mesh);
+                itemMeshes.push(mesh);
+            });
+        }
+        
+        function checkItemCollection(agentPos) {
+            itemMeshes.forEach((mesh, index) => {
+                if (!mesh.parent) return;
+                
+                const distance = agentPos.distanceTo(mesh.position);
+                if (distance < 1.5) {
+                    const item = mesh.userData.itemData;
+                    
+                    if (inventory.add(item)) {
+                        item.collected = true;
+                        saveWorldItems();
+                        
+                        scene.remove(mesh);
+                        itemMeshes.splice(index, 1);
+                        
+                        log(`Picked up ${item.name}!`);
+                    }
+                }
+            });
+        }
+        
+        // Audio Context for portal sounds
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function createPortalSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.5);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        // ============================================
+        // AMBIENT MUSIC - Arena (Combat/Intense)
+        // ============================================
+        let ambientOscillators = [];
+        let ambientGain = null;
+        let isMusicPlaying = false;
+        
+        function startAmbientMusic() {
+            if (isMusicPlaying) return;
+            isMusicPlaying = true;
+            
+            ambientGain = audioContext.createGain();
+            ambientGain.gain.value = 0.06;
+            ambientGain.connect(audioContext.destination);
+            
+            // Low drone
+            const droneOsc = audioContext.createOscillator();
+            droneOsc.type = 'sawtooth';
+            droneOsc.frequency.value = 65; // C2
+            const droneFilter = audioContext.createBiquadFilter();
+            droneFilter.type = 'lowpass';
+            droneFilter.frequency.value = 200;
+            const droneGain = audioContext.createGain();
+            droneGain.gain.value = 0.2;
+            droneOsc.connect(droneFilter);
+            droneFilter.connect(droneGain);
+            droneGain.connect(ambientGain);
+            droneOsc.start();
+            ambientOscillators.push(droneOsc);
+            
+            // Rhythmic pulse
+            const pulseOsc = audioContext.createOscillator();
+            pulseOsc.type = 'square';
+            pulseOsc.frequency.value = 130; // C3
+            const pulseGain = audioContext.createGain();
+            pulseGain.gain.value = 0.1;
+            
+            // LFO for rhythmic effect
+            const pulseLFO = audioContext.createOscillator();
+            pulseLFO.type = 'square';
+            pulseLFO.frequency.value = 2; // 2 Hz pulse
+            const pulseLFOGain = audioContext.createGain();
+            pulseLFOGain.gain.value = 0.08;
+            pulseLFO.connect(pulseLFOGain);
+            pulseLFOGain.connect(pulseGain.gain);
+            pulseLFO.start();
+            
+            pulseOsc.connect(pulseGain);
+            pulseGain.connect(ambientGain);
+            pulseOsc.start();
+            ambientOscillators.push(pulseOsc);
+            ambientOscillators.push(pulseLFO);
+        }
+        
+        // Start on first interaction
+        document.addEventListener('click', () => {
+            if (!isMusicPlaying) startAmbientMusic();
+        }, { once: true });
+        
+        function createFootstepSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playSound(soundType) {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            switch(soundType) {
+                case 'footstep':
+                    createFootstepSound();
+                    break;
+                case 'portal':
+                    createPortalSound();
+                    break;
+            }
+        }
+        
+        let lastFootstepTime = 0;
         
         const state = {
             particles: [],
@@ -242,7 +584,8 @@
         
         function returnToLobby() {
             log('Returning to Lobby World...');
-            window.location.href = 'lobby.html';
+            inventory.save();
+            window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
         }
         
         // ============================================
@@ -549,6 +892,9 @@
                 jumpVelocity = jumpStrength;
                 isGrounded = false;
             }
+            if (e.code === 'KeyI') {
+                inventory.toggle();
+            }
         });
         
         document.addEventListener('keyup', (e) => {
@@ -665,6 +1011,17 @@
             }
             
             // Camera follow with click-drag angles
+            
+            // Play footstep sound when moving
+            const isMoving = agentVelocity.length() > 0;
+            if (isMoving && isGrounded) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 400) {
+                    playSound('footstep');
+                    lastFootstepTime = now;
+                }
+            }
+            
             camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
             camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
             camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
@@ -676,6 +1033,9 @@
                 state.transitioning = true;
                 log('Entering portal...');
                 
+                // Play portal sound
+                playSound('portal');
+                
                 // Trigger transition
                 const overlay = document.getElementById('arrival-overlay');
                 const text = document.getElementById('arrival-text');
@@ -685,7 +1045,8 @@
                 createParticleBurst(agentGroup.position);
                 
                 setTimeout(() => {
-                    window.location.href = 'lobby.html';
+                    inventory.save();
+                    window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
                 }, 2000);
             }
         }
@@ -748,6 +1109,17 @@
             // Update agent
             updateAgentMovement();
             
+            // Check item collection
+            if (agentGroup) {
+                checkItemCollection(agentGroup.position);
+            }
+            
+            // Animate items
+            itemMeshes.forEach(mesh => {
+                mesh.rotation.y += 0.02;
+                mesh.position.y = 1.5 + Math.sin(Date.now() * 0.002 + mesh.position.x) * 0.2;
+            });
+            
             renderer.render(scene, camera);
         }
         
@@ -760,6 +1132,9 @@
         
         // Arrival animation
         createArrivalBurst();
+        
+        // Spawn world items
+        spawnWorldItems(scene);
         
         // Fade out overlay
         setTimeout(() => {
