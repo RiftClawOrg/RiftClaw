@@ -1,0 +1,15 @@
+{
+  "relay": {
+    "name": "RiftClaw Development Relay",
+    "version": "0.1.0",
+    "maxConnections": 100,
+    "rateLimitWindowMs": 60000,
+    "rateLimitMaxRequests": 30
+  },
+  "worlds": {
+    "_comment": "Add your world WebSocket URLs here",
+    "lobby": "wss://molt.space/lobby",
+    "example": "wss://example.com/world"
+  }
+}
+

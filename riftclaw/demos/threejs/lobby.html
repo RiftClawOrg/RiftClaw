@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiftClaw - Lobby World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00d5ff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #00d5ff;
+            max-width: 350px;
+            z-index: 100;
+        }
+        
+        #ui h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00d5ff;
+        }
+        
+        #ui .status {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        #ui .connected {
+            color: #0f0;
+        }
+        
+        #ui .disconnected {
+            color: #f00;
+        }
+        
+        #ui .handoff {
+            color: #ff0;
+            animation: pulse 0.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        #log {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        #log .entry {
+            margin: 3px 0;
+            padding: 3px 0;
+        }
+        
+        #log .sent {
+            color: #0f0;
+        }
+        
+        #log .received {
+            color: #00d5ff;
+        }
+        
+        #log .error {
+            color: #f00;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #888;
+            font-size: 0.8rem;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #controls kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fff;
+        }
+        
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #000 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+        
+        #transition-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            font-size: 2rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 20px #00d5ff;
+        }
+        
+        #transition-text.active {
+            opacity: 1;
+        }
+        
+        #inventory-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #00d5ff;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(0, 213, 255, 0.3);
+        }
+        
+        #storage-panel {
+            position: fixed;
+            top: 50%;
+            left: 25%;
+            transform: translate(-50%, -50%);
+            color: #ffd700;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #ffd700;
+            width: 350px;
+            max-height: 500px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+        
+        #storage-prompt {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffd700;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border-radius: 8px;
+            border: 2px solid #ffd700;
+            z-index: 100;
+            display: none;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+        
+        #inventory-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="inventory-panel" style="display:none;">
+        <h3>🎒 Inventory</h3>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
+        <div id="inventory"><div style="color:#666">Loading...</div></div>
+    </div>
+    
+    <div id="storage-panel">
+        <h3>📦 Storage Chest</h3>
+        <div style="font-size:0.9rem;color:#ffd700;margin-bottom:10px;text-align:center;">Capacity: <span id="storage-count">0/100 slots</span></div>
+        <div id="storage-items"><div style="color:#666;text-align:center;padding:20px;">Storage Empty</div></div>
+        <div style="margin-top:15px;padding-top:10px;border-top:1px solid rgba(255,215,0,0.3);">
+            <div style="font-size:0.8rem;color:#888;text-align:center;">Press 'E' to close • Max x999 per stack</div>
+        </div>
+    </div>
+    
+    <div id="storage-prompt">
+        <div>📦 Storage Chest Nearby</div>
+        <div style="font-size:0.9rem;margin-top:5px;">Press 'E' to open</div>
+        <div style="font-size:0.8rem;color:#888;margin-top:3px;">100 slots • x999 max stack</div>
+    </div>
+    
+    <div id="canvas-container"></div>
+    
+    <div id="ui">
+        <h1>🌌 Lobby World</h1>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div id="portal-status">Portal: <span style="color:#ff0">INACTIVE</span></div>
+        <div id="log"></div>
+    </div>
+    
+    <div id="controls">
+        <strong>Controls:</strong><br>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move<br>
+        <kbd>SPACE</kbd> - Jump<br>
+        <kbd>Click+Drag</kbd> - Rotate camera<br>
+        Walk into <span style="color:#ff3333">red</span> portal → Arena<br>
+        Walk into <span style="color:#ff00ff">magenta</span> portal → Cyb3r World<br>
+        Walk into <span style="color:#4ade80">green</span> portal → Forest<br>
+        Walk into <span style="color:#0088ff">blue</span> portal → Space Station<br>
+        Walk into <span style="color:#cccccc">gray</span> portal → Moon World<br>
+        Walk into <span style="color:#00aaff">aqua</span> portal → Water World
+    </div>
+    
+    <div id="transition-overlay"></div>
+    <div id="transition-text">
+        <div>🌀 Crossing the Rift...</div>
+        <div style="font-size:1rem;color:#888;margin-top:10px">Entering Arena World</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // RIFTCLAW THREE.JS DEMO - LOBBY WORLD
+        // ============================================
+        
+        // ============================================
+        // INVENTORY SYSTEM
+        // ============================================
+        
+        const inventory = {
+            items: [],
+            maxSlots: 8,
+            
+            add(item) {
+                // Check if item already exists (stack by name)
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    existing.quantity += item.quantity || 1;
+                    this.save();
+                    this.updateUI();
+                    log(`Added ${item.name} (x${existing.quantity})`, 'info');
+                    return true;
+                }
+                
+                // Add new item if space available
+                if (this.items.length >= this.maxSlots) {
+                    log('Inventory full!', 'error');
+                    return false;
+                }
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: item.quantity || 1,
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                log(`Added ${item.name} to inventory`, 'info');
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Removed ${item.name} from inventory`, 'info');
+                    return item;
+                }
+                return null;
+            },
+            
+            get() {
+                return this.items;
+            },
+            
+            toJSON() {
+                return JSON.stringify(this.items);
+            },
+            
+            fromJSON(json) {
+                try {
+                    this.items = JSON.parse(json) || [];
+                    this.updateUI();
+                } catch(e) {
+                    this.items = [];
+                }
+            },
+            
+            save() {
+                localStorage.setItem('riftclaw_inventory', this.toJSON());
+            },
+            
+            load() {
+                const saved = localStorage.getItem('riftclaw_inventory');
+                if (saved) {
+                    this.fromJSON(saved);
+                }
+                // Also check URL params for handoff
+                const urlParams = new URLSearchParams(window.location.search);
+                const handoffInventory = urlParams.get('inventory');
+                if (handoffInventory) {
+                    this.fromJSON(decodeURIComponent(handoffInventory));
+                    // Clear from URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+                // Consolidate duplicates on load
+                this.consolidate();
+                this.updateUI();
+            },
+            
+            consolidate() {
+                const consolidated = [];
+                this.items.forEach(item => {
+                    const existing = consolidated.find(i => i.name === item.name);
+                    if (existing) {
+                        existing.quantity += item.quantity;
+                    } else {
+                        consolidated.push({...item});
+                    }
+                });
+                this.items = consolidated;
+                this.save();
+                log('Inventory consolidated!', 'info');
+            },
+            
+            updateUI() {
+                const invEl = document.getElementById('inventory');
+                const isStorageOpen = document.getElementById('storage-panel').style.display === 'block';
+                if (invEl) {
+                    if (this.items.length === 0) {
+                        invEl.innerHTML = '<div style="color:#666">Empty</div>';
+                    } else {
+                        invEl.innerHTML = this.items.map((item, index) => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.4);border-radius:4px;margin:4px 0;border:1px solid rgba(0,213,255,0.2);">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1">${item.name}</span>
+                                <span style="color:#888;margin-right:8px;">x${item.quantity}</span>
+                                ${isStorageOpen ? 
+                                    `<button onclick="storeItem('${item.id}')" style="background:#ffd700;color:#000;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;font-weight:bold;">STORE</button>` :
+                                    `<button onclick="inventory.drop('${item.id}')" style="background:#ff3333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;" title="Drop item">🗑️</button>`
+                                }
+                            </div>
+                        `).join('');
+                    }
+                }
+            },
+            
+            drop(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    // Spawn dropped item in world
+                    spawnDroppedItem(item);
+                    
+                    // Remove from inventory
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Dropped ${item.name}`, 'info');
+                    
+                    // Close inventory
+                    this.toggle();
+                }
+            },
+            
+            toggle() {
+                const panel = document.getElementById('inventory-panel');
+                if (panel) {
+                    const isHidden = panel.style.display === 'none';
+                    panel.style.display = isHidden ? 'block' : 'none';
+                }
+            }
+        };
+        
+        // ============================================
+        // WORLD ITEMS SYSTEM
+        // ============================================
+        
+        const worldItems = {
+            lobby: [
+                { id: 'lobby_1', name: 'Portal Shard', type: 'material', icon: '💎', world: 'lobby', x: 5, z: 5, collected: false },
+                { id: 'lobby_2', name: 'Data Crystal', type: 'tech', icon: '💾', world: 'lobby', x: -5, z: 5, collected: false },
+                { id: 'lobby_3', name: 'Neon Keycard', type: 'key', icon: '🗝️', world: 'lobby', x: 5, z: -5, collected: false },
+                { id: 'lobby_4', name: 'Relay Fragment', type: 'material', icon: '📡', world: 'lobby', x: -5, z: -5, collected: false },
+                { id: 'lobby_5', name: 'Hub Token', type: 'token', icon: '🪙', world: 'lobby', x: 0, z: 8, collected: false }
+            ]
+        };
+        
+        let itemMeshes = [];
+        
+        function loadWorldItems() {
+            const saved = localStorage.getItem('riftclaw_world_items');
+            if (saved) {
+                const data = JSON.parse(saved);
+                Object.assign(worldItems, data);
+            }
+        }
+        
+        function saveWorldItems() {
+            localStorage.setItem('riftclaw_world_items', JSON.stringify(worldItems));
+        }
+        
+        // Dropped items from inventory
+        let droppedItems = [];
+        
+        function spawnDroppedItem(item) {
+            const geometry = new THREE.OctahedronGeometry(0.3, 0);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00,
+                transparent: true,
+                opacity: 0.9
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            // Spawn at player position
+            if (agentGroup) {
+                mesh.position.set(
+                    agentGroup.position.x + (Math.random() - 0.5) * 2,
+                    1,
+                    agentGroup.position.z + (Math.random() - 0.5) * 2
+                );
+            } else {
+                mesh.position.set(0, 1, 0);
+            }
+            
+            mesh.userData = { itemData: {...item, id: Date.now().toString()} };
+            
+            // Add glow ring
+            const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
+            const ringMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00, 
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.6
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = -0.3;
+            mesh.add(ring);
+            
+            scene.add(mesh);
+            droppedItems.push(mesh);
+            
+            // Auto-remove after 5 minutes
+            setTimeout(() => {
+                if (mesh.parent) {
+                    scene.remove(mesh);
+                    const idx = droppedItems.indexOf(mesh);
+                    if (idx >= 0) droppedItems.splice(idx, 1);
+                }
+            }, 300000);
+        }
+        
+        function spawnWorldItems(scene) {
+            loadWorldItems();
+            
+            const worldName = 'lobby';
+            if (!worldItems[worldName]) return;
+            
+            // Unique geometry creators per item type
+            const createGeometry = (type) => {
+                switch(type) {
+                    case 'material': return new THREE.DodecahedronGeometry(0.3, 0);
+                    case 'tech': return new THREE.IcosahedronGeometry(0.3, 0);
+                    case 'key': return new THREE.TorusGeometry(0.25, 0.1, 8, 16);
+                    case 'token': return new THREE.CylinderGeometry(0.3, 0.3, 0.1, 16);
+                    default: return new THREE.OctahedronGeometry(0.3, 0);
+                }
+            };
+            
+            worldItems[worldName].forEach(item => {
+                if (item.collected) return;
+                
+                // Create item mesh with unique geometry
+                const geometry = createGeometry(item.type);
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: 0x00d5ff,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(item.x, 1, item.z);
+                mesh.userData = { itemId: item.id, itemData: item };
+                
+                // Add glow ring
+                const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ 
+                    color: 0x00d5ff, 
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = -0.3;
+                mesh.add(ring);
+                
+                scene.add(mesh);
+                itemMeshes.push(mesh);
+            });
+        }
+        
+        function checkItemCollection(agentPos) {
+            // Check world items
+            itemMeshes.forEach((mesh, index) => {
+                if (!mesh.parent) return;
+                
+                const distance = agentPos.distanceTo(mesh.position);
+                if (distance < 1.5) {
+                    const item = mesh.userData.itemData;
+                    
+                    if (inventory.add(item)) {
+                        item.collected = true;
+                        saveWorldItems();
+                        scene.remove(mesh);
+                        itemMeshes.splice(index, 1);
+                        playSound('portal');
+                        log(`Picked up ${item.name}!`, 'received');
+                    }
+                }
+            });
+            
+            // Check dropped items
+            droppedItems.forEach((mesh, index) => {
+                if (!mesh.parent) return;
+                
+                const distance = agentPos.distanceTo(mesh.position);
+                if (distance < 1.5) {
+                    const item = mesh.userData.itemData;
+                    
+                    if (inventory.add(item)) {
+                        scene.remove(mesh);
+                        droppedItems.splice(index, 1);
+                        playSound('portal');
+                        log(`Picked up ${item.name}!`, 'received');
+                    }
+                }
+            });
+            
+            // Check storage chest interaction
+            if (storageChest) {
+                const chestDistance = agentPos.distanceTo(storageChest.position);
+                if (chestDistance < 2.5 && !storageOpen) {
+                    showStoragePrompt();
+                } else if (chestDistance >= 2.5 && storageOpen) {
+                    hideStoragePrompt();
+                    closeStorage();
+                }
+            }
+        }
+        
+        // ============================================
+        // STORAGE CHEST SYSTEM
+        // ============================================
+        
+        let storageChest = null;
+        let storageOpen = false;
+        const STORAGE_CAPACITY = 100;
+        const STORAGE_MAX_STACK = 999;
+        
+        const storage = {
+            items: [],
+            
+            add(item) {
+                // Check if item already exists (stack by name)
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    const newQty = existing.quantity + (item.quantity || 1);
+                    if (newQty > STORAGE_MAX_STACK) {
+                        existing.quantity = STORAGE_MAX_STACK;
+                        log(`Storage stack limit reached (x${STORAGE_MAX_STACK})`, 'error');
+                    } else {
+                        existing.quantity = newQty;
+                    }
+                    this.save();
+                    this.updateUI();
+                    return true;
+                }
+                
+                // Add new item if space available
+                if (this.items.length >= STORAGE_CAPACITY) {
+                    log('Storage full!', 'error');
+                    return false;
+                }
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: Math.min(item.quantity || 1, STORAGE_MAX_STACK),
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    return item;
+                }
+                return null;
+            },
+            
+            save() {
+                localStorage.setItem('riftclaw_storage', JSON.stringify(this.items));
+            },
+            
+            load() {
+                const saved = localStorage.getItem('riftclaw_storage');
+                if (saved) {
+                    this.items = JSON.parse(saved) || [];
+                }
+            },
+            
+            updateUI() {
+                const storageEl = document.getElementById('storage-items');
+                const countEl = document.getElementById('storage-count');
+                if (countEl) {
+                    countEl.textContent = `${this.items.length}/${STORAGE_CAPACITY} slots`;
+                }
+                if (storageEl) {
+                    if (this.items.length === 0) {
+                        storageEl.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Storage Empty</div>';
+                    } else {
+                        storageEl.innerHTML = this.items.map((item, index) => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.4);border-radius:4px;margin:4px 0;border:1px solid rgba(255,215,0,0.2);">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1;font-size:0.9rem;">${item.name}</span>
+                                <span style="color:#ffd700;margin-right:8px;font-weight:bold;">x${item.quantity}</span>
+                                <button onclick="takeFromStorage('${item.id}')" style="background:#00d5ff;color:#000;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;font-weight:bold;">TAKE</button>
+                            </div>
+                        `).join('');
+                    }
+                }
+            }
+        };
+        
+        function spawnStorageChest(scene) {
+            const chestGroup = new THREE.Group();
+            chestGroup.position.set(8, 0, 0);
+            
+            // Chest base
+            const baseGeo = new THREE.BoxGeometry(1.2, 0.8, 0.8);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.4;
+            chestGroup.add(base);
+            
+            // Chest lid
+            const lidGeo = new THREE.BoxGeometry(1.2, 0.3, 0.8);
+            const lidMat = new THREE.MeshStandardMaterial({ color: 0xA0522D });
+            const lid = new THREE.Mesh(lidGeo, lidMat);
+            lid.position.y = 0.95;
+            chestGroup.add(lid);
+            
+            // Lock
+            const lockGeo = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+            const lockMat = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+            const lock = new THREE.Mesh(lockGeo, lockMat);
+            lock.position.set(0, 0.8, 0.41);
+            chestGroup.add(lock);
+            
+            // Glow effect
+            const glowGeo = new THREE.RingGeometry(0.8, 1, 16);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00d5ff, 
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.rotation.x = -Math.PI / 2;
+            glow.position.y = 0.05;
+            chestGroup.add(glow);
+            
+            scene.add(chestGroup);
+            storageChest = chestGroup;
+            
+            // Animate glow
+            setInterval(() => {
+                glow.material.opacity = 0.2 + Math.sin(Date.now() * 0.002) * 0.1;
+            }, 50);
+        }
+        
+        function showStoragePrompt() {
+            const prompt = document.getElementById('storage-prompt');
+            if (prompt) prompt.style.display = 'block';
+        }
+        
+        function hideStoragePrompt() {
+            const prompt = document.getElementById('storage-prompt');
+            if (prompt) prompt.style.display = 'none';
+        }
+        
+        function openStorage() {
+            storageOpen = true;
+            storage.updateUI();
+            document.getElementById('storage-panel').style.display = 'block';
+            document.getElementById('inventory-panel').style.display = 'block';
+            inventory.updateUI();
+        }
+        
+        function closeStorage() {
+            storageOpen = false;
+            document.getElementById('storage-panel').style.display = 'none';
+            document.getElementById('inventory-panel').style.display = 'none';
+            inventory.updateUI();
+        }
+        
+        function takeFromStorage(itemId) {
+            const item = storage.remove(itemId);
+            if (item && inventory.add(item)) {
+                log(`Took ${item.name} from storage`);
+                storage.updateUI();
+                inventory.updateUI();
+            } else if (item) {
+                // Put back if inventory full
+                storage.add(item);
+                log('Inventory full!', 'error');
+            }
+        }
+        
+        function storeItem(itemId) {
+            const item = inventory.items.find(i => i.id === itemId);
+            if (item) {
+                if (storage.add(item)) {
+                    // Remove from inventory
+                    const idx = inventory.items.findIndex(i => i.id === itemId);
+                    if (idx >= 0) {
+                        inventory.items.splice(idx, 1);
+                        inventory.save();
+                        inventory.updateUI();
+                        storage.updateUI();
+                        log(`Stored ${item.name} in chest`);
+                    }
+                }
+            }
+        }
+        
+        // Key handler for storage
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyE' && !storageOpen) {
+                const prompt = document.getElementById('storage-prompt');
+                if (prompt && prompt.style.display === 'block') {
+                    openStorage();
+                }
+            } else if (e.code === 'KeyE' && storageOpen) {
+                closeStorage();
+            }
+        });
+        
+        // Initialize inventory on page load
+        inventory.load();
+        loadWorldItems();
+        storage.load();
+        inventory.updateUI();
+        
+        // Global state
+        const state = {
+            connected: false,
+            ws: null,
+            agentId: null,
+            agentName: 'RiftWalker_ThreeJS',
+            inPortal: false,
+            handoffPending: false,
+            particles: []
+        };
+        
+        // UI Helpers
+        function log(msg, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type}] ${msg}`);
+        }
+        
+        function setStatus(text, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = `status ${className}`;
+        }
+        
+        function setPortalStatus(active) {
+            const portalEl = document.getElementById('portal-status');
+            portalEl.innerHTML = `Portal: <span style="color:${active ? '#0f0' : '#ff0'}">${active ? 'ACTIVE - WALK THROUGH!' : 'INACTIVE'}</span>`;
+        }
+        
+        // Audio Context for portal sounds
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // ============================================
+        // AMBIENT MUSIC - Lobby (Tech/Neutral)
+        // ============================================
+        let ambientOscillators = [];
+        let ambientGain = null;
+        let isMusicPlaying = false;
+        
+        function startAmbientMusic() {
+            if (isMusicPlaying || state.audioMuted) return;
+            isMusicPlaying = true;
+            
+            // Create master gain for ambient
+            ambientGain = audioContext.createGain();
+            ambientGain.gain.value = 0.08;
+            ambientGain.connect(audioContext.destination);
+            
+            // Drone pad - low tech hum
+            const droneOsc = audioContext.createOscillator();
+            droneOsc.type = 'sine';
+            droneOsc.frequency.value = 55; // A1
+            const droneGain = audioContext.createGain();
+            droneGain.gain.value = 0.3;
+            droneOsc.connect(droneGain);
+            droneGain.connect(ambientGain);
+            droneOsc.start();
+            ambientOscillators.push(droneOsc);
+            
+            // Second drone - fifth above
+            const drone2Osc = audioContext.createOscillator();
+            drone2Osc.type = 'triangle';
+            drone2Osc.frequency.value = 82.5; // E2
+            const drone2Gain = audioContext.createGain();
+            drone2Gain.gain.value = 0.2;
+            
+            // LFO for drone 2
+            const lfo = audioContext.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.1;
+            const lfoGain = audioContext.createGain();
+            lfoGain.gain.value = 0.1;
+            lfo.connect(lfoGain);
+            lfoGain.connect(drone2Gain.gain);
+            lfo.start();
+            
+            drone2Osc.connect(drone2Gain);
+            drone2Gain.connect(ambientGain);
+            drone2Osc.start();
+            ambientOscillators.push(drone2Osc);
+            ambientOscillators.push(lfo);
+        }
+        
+        function stopAmbientMusic() {
+            ambientOscillators.forEach(osc => {
+                try { osc.stop(); } catch(e) {}
+            });
+            ambientOscillators = [];
+            isMusicPlaying = false;
+        }
+        
+        // Start music on first interaction
+        document.addEventListener('click', () => {
+            if (!isMusicPlaying && !state.audioMuted) {
+                startAmbientMusic();
+            }
+        }, { once: true });
+        
+        function toggleMute() {
+            state.audioMuted = !state.audioMuted;
+            document.getElementById('mute-btn').textContent = state.audioMuted ? '🔇' : '🔊';
+            if (state.audioMuted) {
+                stopAmbientMusic();
+            } else {
+                startAmbientMusic();
+            }
+        }
+        
+        function createPortalSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.5);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        function createFootstepSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function playSound(soundType) {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            switch(soundType) {
+                case 'footstep':
+                    createFootstepSound();
+                    break;
+                case 'portal':
+                    createPortalSound();
+                    break;
+            }
+        }
+        
+        let lastFootstepTime = 0;
+        
+        // ============================================
+        // WEBSOCKET - RIFTCLAW PROTOCOL
+        // ============================================
+        
+        function connectToRelay() {
+            const relayUrl = 'ws://localhost:8765';
+            log(`Connecting to relay at ${relayUrl}...`);
+            
+            state.ws = new WebSocket(relayUrl);
+            
+            state.ws.onopen = () => {
+                log('Connected to relay!', 'received');
+                setStatus('Connected', 'connected');
+                state.connected = true;
+                
+                // Send discover after connection
+                setTimeout(sendDiscover, 500);
+            };
+            
+            state.ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleMessage(msg);
+                } catch (e) {
+                    log('Failed to parse message', 'error');
+                }
+            };
+            
+            state.ws.onclose = () => {
+                log('Disconnected from relay', 'error');
+                setStatus('Disconnected', 'disconnected');
+                state.connected = false;
+            };
+            
+            state.ws.onerror = (err) => {
+                log('WebSocket error', 'error');
+            };
+        }
+        
+        function sendMessage(type, payload = {}) {
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const msg = {
+                type,
+                agent_id: state.agentId,
+                timestamp: Date.now() / 1000,
+                ...payload
+            };
+            
+            state.ws.send(JSON.stringify(msg));
+            log(`Sent: ${type}`, 'sent');
+        }
+        
+        function handleMessage(msg) {
+            log(`Received: ${msg.type}`, 'received');
+            
+            switch (msg.type) {
+                case 'welcome':
+                    log(`Welcome to ${msg.world_name}`);
+                    break;
+                    
+                case 'discover_response':
+                    if (msg.portals && msg.portals.length > 0) {
+                        const portal = msg.portals[0];
+                        log(`Found portal: ${portal.name}`);
+                        setPortalStatus(true);
+                    }
+                    break;
+                    
+                case 'handoff_confirm':
+                    handleHandoffConfirm(msg);
+                    break;
+                    
+                case 'handoff_rejected':
+                    log(`Handoff rejected: ${msg.reason}`, 'error');
+                    state.handoffPending = false;
+                    break;
+                    
+                case 'error':
+                    log(`Error: ${msg.message}`, 'error');
+                    break;
+            }
+        }
+        
+        function sendDiscover() {
+            sendMessage('discover');
+        }
+        
+        function sendHandoffRequest(portalId) {
+            if (state.handoffPending) return;
+            
+            state.handoffPending = true;
+            log('Initiating portal handoff...');
+            
+            const passport = {
+                agent_id: state.agentId,
+                agent_name: state.agentName,
+                source_world: 'lobby',
+                target_world: state.targetWorld || 'arena',
+                position: { x: agentGroup.position.x, y: agentGroup.position.y, z: agentGroup.position.z },
+                inventory: inventory.toJSON(),
+                inventory_hash: btoa(inventory.toJSON()).substr(0, 16),
+                memory_summary: `Carrying ${inventory.get().length} items through the portal...`,
+                reputation: 5.0,
+                timestamp: Date.now() / 1000,
+                nonce: Math.random().toString(36).substr(2, 9)
+            };
+            
+            sendMessage('handoff_request', {
+                portal_id: portalId,
+                passport
+            });
+        }
+        
+        function handleHandoffConfirm(msg) {
+            log('Handoff confirmed! Crossing the rift...');
+            
+            // Play portal sound
+            playSound('portal');
+            
+            // Trigger transition animation
+            const overlay = document.getElementById('transition-overlay');
+            const text = document.getElementById('transition-text');
+            
+            overlay.classList.add('active');
+            text.classList.add('active');
+            
+            // Create particle burst
+            createParticleBurst(agentGroup.position);
+            
+            // Redirect after animation
+            setTimeout(() => {
+                window.location.href = 'arena.html?inventory=' + encodeURIComponent(inventory.toJSON());
+            }, 2000);
+        }
+        
+        // ============================================
+        // THREE.JS SCENE
+        // ============================================
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050510);
+        scene.fog = new THREE.FogExp2(0x050510, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 8);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        
+        // Portal glow light
+        const portalLight = new THREE.PointLight(0x00d5ff, 2, 20);
+        portalLight.position.set(0, 2, -5);
+        scene.add(portalLight);
+        
+        // ============================================
+        // ENVIRONMENT
+        // ============================================
+        
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x111122,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // Grid helper
+        const gridHelper = new THREE.GridHelper(50, 50, 0x00d5ff, 0x222244);
+        scene.add(gridHelper);
+        
+        // ============================================
+        // PORTAL
+        // ============================================
+        
+        const portalGroup = new THREE.Group();
+        portalGroup.position.set(0, 2, -8);
+        portalGroup.lookAt(0, 2, 0);
+        scene.add(portalGroup);
+        
+        // Portal ring (torus) - RED for Arena
+        const torusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const torusMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            emissive: 0xff3333,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const portalRing = new THREE.Mesh(torusGeometry, torusMaterial);
+        portalGroup.add(portalRing);
+        
+        // Portal inner glow - RED for Arena
+        const portalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const portalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff3333,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const portalInner = new THREE.Mesh(portalInnerGeometry, portalInnerMaterial);
+        portalGroup.add(portalInner);
+        
+        // Outer glow ring - RED
+        const glowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff3333,
+            transparent: true,
+            opacity: 0.2
+        });
+        const portalGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+        portalGroup.add(portalGlow);
+        
+               // Portal name label
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#00d5ff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+        
+        const portalLabel = createTextSprite('→ Arena World');
+        portalLabel.position.set(0, 3.5, 0);
+        portalGroup.add(portalLabel);
+        
+        // ============================================
+        // SECOND PORTAL - Cyb3r World
+        // ============================================
+        
+        const ccPortalGroup = new THREE.Group();
+        ccPortalGroup.position.set(6.9, 2, -4);
+        ccPortalGroup.lookAt(0, 2, 0);
+        scene.add(ccPortalGroup);
+        
+        // CC Portal ring (purple/magenta)
+        const ccTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const ccTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff00ff,
+            emissive: 0xff00ff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const ccPortalRing = new THREE.Mesh(ccTorusGeometry, ccTorusMaterial);
+        ccPortalGroup.add(ccPortalRing);
+        
+        // CC Portal inner
+        const ccPortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const ccPortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff00ff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const ccPortalInner = new THREE.Mesh(ccPortalInnerGeometry, ccPortalInnerMaterial);
+        ccPortalGroup.add(ccPortalInner);
+        
+        // CC Portal outer glow
+        const ccGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const ccGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff00ff,
+            transparent: true,
+            opacity: 0.2
+        });
+        const ccPortalGlow = new THREE.Mesh(ccGlowGeometry, ccGlowMaterial);
+        ccPortalGroup.add(ccPortalGlow);
+        
+        // CC Portal label
+        const ccPortalLabel = createTextSprite('→ Cyb3r World');
+        ccPortalLabel.position.set(0, 3.5, 0);
+        ccPortalGroup.add(ccPortalLabel);
+        
+        // CC Portal particles (magenta)
+        function createCCPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xff00ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            ccPortalGroup.add(particles);
+            return particles;
+        }
+        
+        const ccPortalParticles = createCCPortalParticles();
+        
+        // ============================================
+        // THIRD PORTAL - Forest World
+        // ============================================
+        
+        const forestPortalGroup = new THREE.Group();
+        forestPortalGroup.position.set(6.9, 2, 4);
+        forestPortalGroup.lookAt(0, 2, 0);
+        scene.add(forestPortalGroup);
+        
+        // Forest Portal ring (green)
+        const forestTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const forestTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4ade80,
+            emissive: 0x4ade80,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const forestPortalRing = new THREE.Mesh(forestTorusGeometry, forestTorusMaterial);
+        forestPortalGroup.add(forestPortalRing);
+        
+        // Forest Portal inner
+        const forestPortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const forestPortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x4ade80,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const forestPortalInner = new THREE.Mesh(forestPortalInnerGeometry, forestPortalInnerMaterial);
+        forestPortalGroup.add(forestPortalInner);
+        
+        // Forest Portal outer glow
+        const forestGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const forestGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x4ade80,
+            transparent: true,
+            opacity: 0.2
+        });
+        const forestPortalGlow = new THREE.Mesh(forestGlowGeometry, forestGlowMaterial);
+        forestPortalGroup.add(forestPortalGlow);
+        
+        // Forest Portal label
+        const forestPortalLabel = createTextSprite('→ Forest World');
+        forestPortalLabel.position.set(0, 3.5, 0);
+        forestPortalGroup.add(forestPortalLabel);
+        
+        // Forest Portal particles (green)
+        function createForestPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x4ade80,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            forestPortalGroup.add(particles);
+            return particles;
+        }
+        
+        const forestPortalParticles = createForestPortalParticles();
+        
+        // ============================================
+        // FOURTH PORTAL - Space Station World
+        // ============================================
+        
+        const spacePortalGroup = new THREE.Group();
+        spacePortalGroup.position.set(0, 2, 8);
+        spacePortalGroup.lookAt(0, 2, 0);
+        scene.add(spacePortalGroup);
+        
+        // Space Portal ring (blue)
+        const spaceTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const spaceTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x0088ff,
+            emissive: 0x0088ff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const spacePortalRing = new THREE.Mesh(spaceTorusGeometry, spaceTorusMaterial);
+        spacePortalGroup.add(spacePortalRing);
+        
+        // Space Portal inner
+        const spacePortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const spacePortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0088ff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const spacePortalInner = new THREE.Mesh(spacePortalInnerGeometry, spacePortalInnerMaterial);
+        spacePortalGroup.add(spacePortalInner);
+        
+        // Space Portal outer glow
+        const spaceGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const spaceGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0088ff,
+            transparent: true,
+            opacity: 0.2
+        });
+        const spacePortalGlow = new THREE.Mesh(spaceGlowGeometry, spaceGlowMaterial);
+        spacePortalGroup.add(spacePortalGlow);
+        
+        // Space Portal label
+        const spacePortalLabel = createTextSprite('→ Space Station');
+        spacePortalLabel.position.set(0, 3.5, 0);
+        spacePortalGroup.add(spacePortalLabel);
+        
+        // Space Portal particles (blue)
+        function createSpacePortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x0088ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            spacePortalGroup.add(particles);
+            return particles;
+        }
+        
+        const spacePortalParticles = createSpacePortalParticles();
+        
+        // ============================================
+        // FIFTH PORTAL - Moon World
+        // ============================================
+        
+        const moonPortalGroup = new THREE.Group();
+        moonPortalGroup.position.set(-6.9, 2, 4);
+        moonPortalGroup.lookAt(0, 2, 0);
+        scene.add(moonPortalGroup);
+        
+        // Moon Portal ring (gray/white)
+        const moonTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const moonTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            emissive: 0xaaaaaa,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const moonPortalRing = new THREE.Mesh(moonTorusGeometry, moonTorusMaterial);
+        moonPortalGroup.add(moonPortalRing);
+        
+        // Moon Portal inner
+        const moonPortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const moonPortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0xcccccc,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const moonPortalInner = new THREE.Mesh(moonPortalInnerGeometry, moonPortalInnerMaterial);
+        moonPortalGroup.add(moonPortalInner);
+        
+        // Moon Portal outer glow
+        const moonGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const moonGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xcccccc,
+            transparent: true,
+            opacity: 0.2
+        });
+        const moonPortalGlow = new THREE.Mesh(moonGlowGeometry, moonGlowMaterial);
+        moonPortalGroup.add(moonPortalGlow);
+        
+        // Moon Portal label
+        const moonPortalLabel = createTextSprite('→ Moon World');
+        moonPortalLabel.position.set(0, 3.5, 0);
+        moonPortalGroup.add(moonPortalLabel);
+        
+        // Moon Portal particles (gray/white)
+        function createMoonPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xcccccc,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            moonPortalGroup.add(particles);
+            return particles;
+        }
+        
+        const moonPortalParticles = createMoonPortalParticles();
+        
+        // ============================================
+        // SIXTH PORTAL - Water World
+        // ============================================
+        
+        const waterPortalGroup = new THREE.Group();
+        waterPortalGroup.position.set(-6.9, 2, -4);
+        waterPortalGroup.lookAt(0, 2, 0);
+        scene.add(waterPortalGroup);
+        
+        // Water Portal ring (aqua/cyan)
+        const waterTorusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const waterTorusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            emissive: 0x0088cc,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const waterPortalRing = new THREE.Mesh(waterTorusGeometry, waterTorusMaterial);
+        waterPortalGroup.add(waterPortalRing);
+        
+        // Water Portal inner
+        const waterPortalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const waterPortalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00aaff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const waterPortalInner = new THREE.Mesh(waterPortalInnerGeometry, waterPortalInnerMaterial);
+        waterPortalGroup.add(waterPortalInner);
+        
+        // Water Portal outer glow
+        const waterGlowGeometry = new THREE.TorusGeometry(2.5, 0.1, 16, 100);
+        const waterGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00aaff,
+            transparent: true,
+            opacity: 0.2
+        });
+        const waterPortalGlow = new THREE.Mesh(waterGlowGeometry, waterGlowMaterial);
+        waterPortalGroup.add(waterPortalGlow);
+        
+        // Water Portal label
+        const waterPortalLabel = createTextSprite('→ Water World');
+        waterPortalLabel.position.set(0, 3.5, 0);
+        waterPortalGroup.add(waterPortalLabel);
+        
+        // Water Portal particles (aqua)
+        function createWaterPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00aaff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            waterPortalGroup.add(particles);
+            return particles;
+        }
+        
+        const waterPortalParticles = createWaterPortalParticles();
+        
+        // ============================================
+        // AGENT (Player)
+        // ============================================
+        
+        // Agent body (cylinder + spheres for r128 compatibility)
+        const agentGroup = new THREE.Group();
+        agentGroup.position.y = 0; // Position so bottom sphere touches ground at y=0
+        scene.add(agentGroup);
+        
+        // Body (cylinder)
+        const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            roughness: 0.3,
+            metalness: 0.7
+        });
+        const agentBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        agentBody.position.y = 0.8;
+        agentBody.castShadow = true;
+        agentGroup.add(agentBody);
+        
+        // Top cap (sphere)
+        const topCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            bodyMaterial
+        );
+        topCap.position.y = 1.3;
+        agentGroup.add(topCap);
+        
+        // Bottom cap (sphere)
+        const bottomCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            bodyMaterial
+        );
+        bottomCap.position.y = 0.3;
+        agentGroup.add(bottomCap);
+        
+        // Agent glow
+        const agentGlow = new THREE.PointLight(0xff3333, 0.5, 3);
+        agentGlow.position.y = 0.8;
+        agentGroup.add(agentGlow);
+        
+        // ============================================
+        // PARTICLES
+        // ============================================
+        
+        function createPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            portalGroup.add(particles);
+            return particles;
+        }
+        
+        const portalParticles = createPortalParticles();
+        
+        function createParticleBurst(position) {
+            const burstCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(burstCount * 3);
+            const velocities = [];
+            
+            for (let i = 0; i < burstCount; i++) {
+                positions[i * 3] = position.x;
+                positions[i * 3 + 1] = position.y;
+                positions[i * 3 + 2] = position.z;
+                
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: (Math.random() - 0.5) * 0.5,
+                    z: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.1,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const burst = new THREE.Points(geometry, material);
+            scene.add(burst);
+            
+            state.particles.push({
+                mesh: burst,
+                velocities,
+                life: 60
+            });
+        }
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        const keys = {};
+        const agentSpeed = 0.1;
+        const agentVelocity = new THREE.Vector3();
+        let jumpVelocity = 0;
+        const gravity = -0.02;
+        const jumpStrength = 0.4;
+        let isGrounded = true;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && isGrounded) {
+                jumpVelocity = jumpStrength;
+                isGrounded = false;
+            }
+            if (e.code === 'KeyI') {
+                inventory.toggle();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mouse look - click and drag
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.3;
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - previousMouseX;
+            const deltaY = e.clientY - previousMouseY;
+            
+            cameraAngleX -= deltaX * 0.005;
+            cameraAngleY += deltaY * 0.005; // Up/down look
+            
+            // Clamp vertical angle
+            cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
+            
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        function updateAgentMovement() {
+            const forward = new THREE.Vector3(0, 0, -1);
+            const right = new THREE.Vector3(1, 0, 0);
+            
+            forward.applyQuaternion(camera.quaternion);
+            right.applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            agentVelocity.set(0, 0, 0);
+            
+            if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyS']) agentVelocity.add(forward.multiplyScalar(-agentSpeed));
+            if (keys['KeyA']) agentVelocity.add(right.multiplyScalar(-agentSpeed));
+            if (keys['KeyD']) agentVelocity.add(right.multiplyScalar(agentSpeed));
+            
+            // Apply horizontal movement
+            agentGroup.position.x += agentVelocity.x;
+            agentGroup.position.z += agentVelocity.z;
+            
+            // Apply jump physics
+            agentGroup.position.y += jumpVelocity;
+            jumpVelocity += gravity;
+            
+            // Ground collision
+            if (agentGroup.position.y <= 0) {
+                agentGroup.position.y = 0;
+                jumpVelocity = 0;
+                isGrounded = true;
+            }
+            
+            // Camera follow with click-drag rotation
+            camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
+            
+            // Play footstep sound when moving
+            const isMoving = agentVelocity.length() > 0;
+            if (isMoving && isGrounded) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 400) {
+                    playSound('footstep');
+                    lastFootstepTime = now;
+                }
+            }
+            
+            camera.lookAt(agentGroup.position);
+        }
+        
+        // ============================================
+        // COLLISION DETECTION
+        // ============================================
+        
+        function checkPortalCollision() {
+            const agentPos = agentGroup.position.clone();
+            const portalRadius = 2.5;
+            
+            // Check Arena portal
+            const arenaPortalPos = portalGroup.position.clone();
+            const arenaDistance = agentPos.distanceTo(arenaPortalPos);
+            
+            if (arenaDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'arena';
+                log('Entered Arena portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to arena
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                setTimeout(() => {
+                    window.location.href = 'arena.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Check Cyb3r World portal
+            const ccPortalPos = ccPortalGroup.position.clone();
+            const ccDistance = agentPos.distanceTo(ccPortalPos);
+            
+            if (ccDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'command-center';
+                log('Entered Cyb3r World portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to cyb3r world
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🖥️ CYB3R WORLD</div><div style="font-size:1rem;color:#888;margin-top:10px">Entering Digital Realm</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                setTimeout(() => {
+                    window.location.href = 'cyb3r-world.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Check Forest portal
+            const forestPortalPos = forestPortalGroup.position.clone();
+            const forestDistance = agentPos.distanceTo(forestPortalPos);
+            
+            if (forestDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'forest';
+                log('Entered Forest portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to Forest World
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🌲 Entering Forest...</div><div style="font-size:1rem;color:#888;margin-top:10px">Nature\'s Sanctuary</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    window.location.href = 'forest.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Check Space Station portal
+            const spacePortalPos = spacePortalGroup.position.clone();
+            const spaceDistance = agentPos.distanceTo(spacePortalPos);
+            
+            if (spaceDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'space-station';
+                log('Entered Space Station portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to Space Station World
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🚀 Entering Space Station...</div><div style="font-size:1rem;color:#888;margin-top:10px">Zero Gravity Zone</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    window.location.href = 'space-station.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Check Moon portal
+            const moonPortalPos = moonPortalGroup.position.clone();
+            const moonDistance = agentPos.distanceTo(moonPortalPos);
+            
+            if (moonDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'moon';
+                log('Entered Moon portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to Moon World
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🌙 Entering Moon World...</div><div style="font-size:1rem;color:#888;margin-top:10px">Low Gravity Zone</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    window.location.href = 'moon.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Check Water World portal
+            const waterPortalPos = waterPortalGroup.position.clone();
+            const waterDistance = agentPos.distanceTo(waterPortalPos);
+            
+            if (waterDistance < portalRadius && !state.inPortal && !state.handoffPending) {
+                state.inPortal = true;
+                state.targetWorld = 'water-world';
+                log('Entered Water World portal!');
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Transition to Water World
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = '<div>🌊 Entering Water World...</div><div style="font-size:1rem;color:#88ccff;margin-top:10px">Underwater Zone</div>';
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    window.location.href = 'water-world.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+                return;
+            }
+            
+            // Reset portal state when far from all
+            if (arenaDistance >= portalRadius && ccDistance >= portalRadius && forestDistance >= portalRadius && spaceDistance >= portalRadius && moonDistance >= portalRadius && waterDistance >= portalRadius) {
+                state.inPortal = false;
+            }
+        }
+        
+        // Spawn world items
+        spawnWorldItems(scene);
+        
+        // Spawn storage chest
+        spawnStorageChest(scene);
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate portal
+            portalRing.rotation.z += 0.01;
+            portalInner.rotation.z -= 0.005;
+            portalGlow.rotation.z += 0.02;
+            
+            // Animate particles
+            const positions = portalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                positions[i * 3 + 1] += 0.02;
+                if (positions[i * 3 + 1] > 1.5) {
+                    positions[i * 3 + 1] = -1.5;
+                }
+            }
+            portalParticles.geometry.attributes.position.needsUpdate = true;
+            portalParticles.rotation.y += 0.002;
+            
+            // Animate CC portal particles
+            const ccPositions = ccPortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                ccPositions[i * 3 + 1] += 0.02;
+                if (ccPositions[i * 3 + 1] > 1.5) {
+                    ccPositions[i * 3 + 1] = -1.5;
+                }
+            }
+            ccPortalParticles.geometry.attributes.position.needsUpdate = true;
+            ccPortalParticles.rotation.y += 0.002;
+            
+            // Animate Forest portal particles
+            const forestPositions = forestPortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                forestPositions[i * 3 + 1] += 0.02;
+                if (forestPositions[i * 3 + 1] > 1.5) {
+                    forestPositions[i * 3 + 1] = -1.5;
+                }
+            }
+            forestPortalParticles.geometry.attributes.position.needsUpdate = true;
+            forestPortalParticles.rotation.y += 0.002;
+            
+            // Animate Space Station portal particles
+            const spacePositions = spacePortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                spacePositions[i * 3 + 1] += 0.02;
+                if (spacePositions[i * 3 + 1] > 1.5) {
+                    spacePositions[i * 3 + 1] = -1.5;
+                }
+            }
+            spacePortalParticles.geometry.attributes.position.needsUpdate = true;
+            spacePortalParticles.rotation.y += 0.002;
+            
+            // Animate Moon portal particles
+            const moonPositions = moonPortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                moonPositions[i * 3 + 1] += 0.02;
+                if (moonPositions[i * 3 + 1] > 1.5) {
+                    moonPositions[i * 3 + 1] = -1.5;
+                }
+            }
+            moonPortalParticles.geometry.attributes.position.needsUpdate = true;
+            moonPortalParticles.rotation.y += 0.002;
+            
+            // Animate Water World portal particles
+            const waterPositions = waterPortalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                waterPositions[i * 3 + 1] += 0.02;
+                if (waterPositions[i * 3 + 1] > 1.5) {
+                    waterPositions[i * 3 + 1] = -1.5;
+                }
+            }
+            waterPortalParticles.geometry.attributes.position.needsUpdate = true;
+            waterPortalParticles.rotation.y += 0.002;
+            
+            // Update burst particles
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.life--;
+                
+                const pos = p.mesh.geometry.attributes.position.array;
+                for (let j = 0; j < p.velocities.length; j++) {
+                    pos[j * 3] += p.velocities[j].x;
+                    pos[j * 3 + 1] += p.velocities[j].y;
+                    pos[j * 3 + 2] += p.velocities[j].z;
+                }
+                p.mesh.geometry.attributes.position.needsUpdate = true;
+                p.mesh.material.opacity = p.life / 60;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    state.particles.splice(i, 1);
+                }
+            }
+            
+            // Update agent
+            updateAgentMovement();
+            
+            // Check collision
+            checkPortalCollision();
+            
+            // Check item collection
+            if (agentGroup) {
+                checkItemCollection(agentGroup.position);
+            }
+            
+            // Animate items
+            itemMeshes.forEach(mesh => {
+                mesh.rotation.y += 0.02;
+                mesh.position.y = 1 + Math.sin(Date.now() * 0.002 + mesh.position.x) * 0.2;
+            });
+            
+            // Animate dropped items
+            droppedItems.forEach(mesh => {
+                mesh.rotation.y += 0.03;
+                mesh.rotation.x += 0.01;
+                mesh.position.y = 1 + Math.sin(Date.now() * 0.003 + mesh.position.x) * 0.15;
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        // Generate agent ID
+        state.agentId = 'rift-' + Math.random().toString(36).substr(2, 9);
+        log(`Agent initialized: ${state.agentId}`);
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Start
+        connectToRelay();
+        animate();
+    </script>
+</body>
+</html>
