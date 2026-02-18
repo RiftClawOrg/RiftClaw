@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiftClaw - Space Station World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00d5ff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #00d5ff;
+            max-width: 350px;
+            z-index: 100;
+        }
+        
+        #ui h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00d5ff;
+        }
+        
+        #ui .status {
+            font-size: 0.9rem;
+            color: #888;
+        }
+        
+        #return-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #00d5ff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        #return-btn:hover {
+            background: #00a8cc;
+            box-shadow: 0 0 20px #00d5ff;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #888;
+            font-size: 0.8rem;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #controls kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fff;
+        }
+        
+        #arrival-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #000 100%);
+            opacity: 1;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #arrival-overlay.fade-out {
+            opacity: 0;
+        }
+        
+        #arrival-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            font-size: 2.5rem;
+            text-align: center;
+            opacity: 1;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 30px #00d5ff;
+        }
+        
+        #arrival-text.fade-out {
+            opacity: 0;
+        }
+        
+        #inventory-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #0088ff;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #0088ff;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(0, 136, 255, 0.3);
+        }
+        
+        #inventory-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            text-align: center;
+        }
+        
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #000 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+        
+        #transition-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            font-size: 2.5rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 30px #00d5ff;
+        }
+        
+        #transition-text.active {
+            opacity: 1;
+        }
+        
+        #mute-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #00d5ff;
+            color: #00d5ff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            z-index: 100;
+        }
+        
+        #mute-btn:hover {
+            background: #00d5ff;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="inventory-panel">
+        <h3>🎒 Inventory</h3>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
+        <div id="inventory"><div style="color:#666">Empty</div></div>
+    </div>
+    <div id="canvas-container"></div>
+    
+    <div id="ui">
+        <h1>🚀 Space Station</h1>
+        <div class="status">Orbiting high above Earth</div>
+        <button id="return-btn" onclick="returnToLobby()">🌀 Return to Lobby</button>
+    </div>
+    
+    <div id="controls">
+        <strong>Controls:</strong><br>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move<br>
+        <kbd>SPACE</kbd> - Jump (low gravity)<br>
+        <kbd>Click+Drag</kbd> - Rotate camera<br>
+        Walk into portal to return
+    </div>
+    
+    <button id="mute-btn" onclick="toggleMute()">🔊</button>
+    
+    <div id="arrival-overlay"></div>
+    <div id="arrival-text">
+        <div>🚀 SPACE STATION</div>
+        <div style="font-size:1rem;color:#888;margin-top:10px">Zero Gravity Zone</div>
+    </div>
+    
+    <div id="transition-overlay"></div>
+    <div id="transition-text">
+        <div>🌀 RETURNING</div>
+        <div style="font-size:1rem;color:#888;margin-top:10px">To Lobby World</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // RIFTCLAW - SPACE STATION WORLD
+        // ============================================
+        
+        // ============================================
+        // INVENTORY SYSTEM
+        // ============================================
+        
+        const inventory = {
+            items: [],
+            maxSlots: 8,
+            
+            add(item) {
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    existing.quantity += item.quantity || 1;
+                    this.save();
+                    this.updateUI();
+                    return true;
+                }
+                if (this.items.length >= this.maxSlots) return false;
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: item.quantity || 1,
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    return item;
+                }
+                return null;
+            },
+            
+            get() { return this.items; },
+            toJSON() { return JSON.stringify(this.items); },
+            fromJSON(json) {
+                try { this.items = JSON.parse(json) || []; } catch(e) { this.items = []; }
+            },
+            save() { localStorage.setItem('riftclaw_inventory', this.toJSON()); },
+            load() {
+                const saved = localStorage.getItem('riftclaw_inventory');
+                if (saved) this.fromJSON(saved);
+                const urlParams = new URLSearchParams(window.location.search);
+                const handoffInv = urlParams.get('inventory');
+                if (handoffInv) {
+                    this.fromJSON(decodeURIComponent(handoffInv));
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+                this.consolidate();
+                this.updateUI();
+            },
+            
+            consolidate() {
+                const consolidated = [];
+                this.items.forEach(item => {
+                    const existing = consolidated.find(i => i.name === item.name);
+                    if (existing) {
+                        existing.quantity += item.quantity;
+                    } else {
+                        consolidated.push({...item});
+                    }
+                });
+                this.items = consolidated;
+                this.save();
+            },
+            
+            updateUI() {
+                const invEl = document.getElementById('inventory');
+                if (invEl) {
+                    if (this.items.length === 0) {
+                        invEl.innerHTML = '<div style="color:#666">Empty</div>';
+                    } else {
+                        invEl.innerHTML = this.items.map((item, index) => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.4);border-radius:4px;margin:4px 0;border:1px solid rgba(0,136,255,0.2);">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1">${item.name}</span>
+                                <span style="color:#888;margin-right:8px;">x${item.quantity}</span>
+                                <button onclick="inventory.dropByName('${item.name}')" style="background:#ff3333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;">🗑️</button>
+                            </div>
+                        `).join('');
+                    }
+                }
+            },
+            
+            dropByName(itemName) {
+                const idx = this.items.findIndex(i => i.name === itemName);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Dropped ${item.name}`);
+                    this.toggle();
+                }
+            },
+            
+            toggle() {
+                const panel = document.getElementById('inventory-panel');
+                if (panel) {
+                    const isHidden = panel.style.display === 'none';
+                    panel.style.display = isHidden ? 'block' : 'none';
+                }
+            }
+        };
+        
+        inventory.load();
+        
+        // ============================================
+        // WORLD ITEMS SYSTEM
+        // ============================================
+        
+        const worldItems = {
+            space: [
+                { id: 'space_1', name: 'Solar Cell', type: 'tech', icon: '☀️', world: 'space', x: 6, z: 6, collected: false },
+                { id: 'space_2', name: 'Star Dust', type: 'material', icon: '✨', world: 'space', x: -6, z: 6, collected: false },
+                { id: 'space_3', name: 'Alien Sample', type: 'material', icon: '👽', world: 'space', x: 6, z: -6, collected: false },
+                { id: 'space_4', name: 'Void Crystal', type: 'magic', icon: '🔮', world: 'space', x: -6, z: -6, collected: false },
+                { id: 'space_5', name: 'Oxygen Tank', type: 'resource', icon: '🫙', world: 'space', x: 0, z: 8, collected: false }
+            ]
+        };
+        
+        let itemMeshes = [];
+        
+        function loadWorldItems() {
+            const saved = localStorage.getItem('riftclaw_world_items');
+            if (saved) {
+                const data = JSON.parse(saved);
+                Object.assign(worldItems, data);
+            }
+        }
+        
+        function saveWorldItems() {
+            localStorage.setItem('riftclaw_world_items', JSON.stringify(worldItems));
+        }
+        
+        function spawnWorldItems(scene) {
+            loadWorldItems();
+            const worldName = 'space';
+            if (!worldItems[worldName]) return;
+            
+            const createGeometry = (type) => {
+                switch(type) {
+                    case 'tech': return new THREE.IcosahedronGeometry(0.3, 0);
+                    case 'material': return new THREE.DodecahedronGeometry(0.3, 0);
+                    case 'magic': return new THREE.TetrahedronGeometry(0.35, 0);
+                    case 'resource': return new THREE.CylinderGeometry(0.3, 0.3, 0.6, 16);
+                    default: return new THREE.OctahedronGeometry(0.3, 0);
+                }
+            };
+            
+            worldItems[worldName].forEach(item => {
+                if (item.collected) return;
+                const geometry = createGeometry(item.type);
+                const material = new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.8 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(item.x, 1.5, item.z);
+                mesh.userData = { itemId: item.id, itemData: item };
+                
+                const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x0088ff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = -0.3;
+                mesh.add(ring);
+                
+                scene.add(mesh);
+                itemMeshes.push(mesh);
+            });
+        }
+        
+        function checkItemCollection(agentPos) {
+            itemMeshes.forEach((mesh, index) => {
+                if (!mesh.parent) return;
+                const distance = agentPos.distanceTo(mesh.position);
+                if (distance < 1.5) {
+                    const item = mesh.userData.itemData;
+                    if (inventory.add(item)) {
+                        item.collected = true;
+                        saveWorldItems();
+                        scene.remove(mesh);
+                        itemMeshes.splice(index, 1);
+                        log(`Picked up ${item.name}!`);
+                    }
+                }
+            });
+        }
+        
+        const state = {
+            particles: [],
+            stars: [],
+            arriving: true,
+            transitioning: false,
+            audioMuted: false
+        };
+        
+        // Audio Context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function createFootstepSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+        
+        function createPortalSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.5);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        // ============================================
+        // AMBIENT MUSIC - Space Station (Sci-fi/Cold)
+        // ============================================
+        let ambientOscillators = [];
+        let ambientGain = null;
+        let isMusicPlaying = false;
+        
+        function startAmbientMusic() {
+            if (isMusicPlaying || state.audioMuted) return;
+            isMusicPlaying = true;
+            
+            ambientGain = audioContext.createGain();
+            ambientGain.gain.value = 0.05;
+            ambientGain.connect(audioContext.destination);
+            
+            // Space drone
+            const droneOsc = audioContext.createOscillator();
+            droneOsc.type = 'sine';
+            droneOsc.frequency.value = 50; // Very low
+            const droneGain = audioContext.createGain();
+            droneGain.gain.value = 0.3;
+            droneOsc.connect(droneGain);
+            droneGain.connect(ambientGain);
+            droneOsc.start();
+            ambientOscillators.push(droneOsc);
+            
+            // Mechanical hum
+            const humOsc = audioContext.createOscillator();
+            humOsc.type = 'triangle';
+            humOsc.frequency.value = 150;
+            const humGain = audioContext.createGain();
+            humGain.gain.value = 0.1;
+            humOsc.connect(humGain);
+            humGain.connect(ambientGain);
+            humOsc.start();
+            ambientOscillators.push(humOsc);
+        }
+        
+        // Start on first interaction
+        document.addEventListener('click', () => {
+            if (!isMusicPlaying && !state.audioMuted) startAmbientMusic();
+        }, { once: true });
+        
+        function playSound(soundType) {
+            if (state.audioMuted) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            switch(soundType) {
+                case 'footstep':
+                    createFootstepSound();
+                    break;
+                case 'portal':
+                    createPortalSound();
+                    break;
+            }
+        }
+        
+        function toggleMute() {
+            state.audioMuted = !state.audioMuted;
+            document.getElementById('mute-btn').textContent = state.audioMuted ? '🔇' : '🔊';
+        }
+        
+        function returnToLobby() {
+            inventory.save();
+            window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
+        }
+        
+        // Particle burst effect
+        function createParticleBurst(position) {
+            const burstCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(burstCount * 3);
+            const velocities = [];
+            
+            for (let i = 0; i < burstCount; i++) {
+                positions[i * 3] = position.x;
+                positions[i * 3 + 1] = position.y;
+                positions[i * 3 + 2] = position.z;
+                
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: (Math.random() - 0.5) * 0.5,
+                    z: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.1,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const burst = new THREE.Points(geometry, material);
+            scene.add(burst);
+            
+            state.particles.push({
+                mesh: burst,
+                velocities,
+                life: 60
+            });
+        }
+        
+        // ============================================
+        // THREE.JS SCENE
+        // ============================================
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050510);
+        scene.fog = new THREE.FogExp2(0x050510, 0.005);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 8);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        sunLight.position.set(50, 100, 50);
+        scene.add(sunLight);
+        
+        // Station interior lights
+        const stationLight = new THREE.PointLight(0x00d5ff, 1, 50);
+        stationLight.position.set(0, 10, 0);
+        scene.add(stationLight);
+        
+        // ============================================
+        // STARS BACKGROUND
+        // ============================================
+        
+        function createStars() {
+            const starCount = 2000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 500;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 500;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 500;
+                
+                const color = new THREE.Color();
+                color.setHSL(0.6 + Math.random() * 0.2, 0.5, 0.5 + Math.random() * 0.5);
+                colors[i * 3] = color.r;
+                colors[i * 3 + 1] = color.g;
+                colors[i * 3 + 2] = color.b;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const material = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            return new THREE.Points(geometry, material);
+        }
+        
+        const stars = createStars();
+        scene.add(stars);
+        
+        // ============================================
+        // SPACE STATION FLOOR
+        // ============================================
+        
+        const floorGeometry = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x2a2a3a,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // Grid pattern on floor
+        const gridHelper = new THREE.GridHelper(50, 50, 0x00d5ff, 0x1a1a2a);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+        
+        // ============================================
+        // SPACE STATION STRUCTURES
+        // ============================================
+        
+        // Central hub
+        const hubGeometry = new THREE.CylinderGeometry(3, 3, 8, 16);
+        const hubMaterial = new THREE.MeshStandardMaterial({
+            color: 0x888899,
+            metalness: 0.9,
+            roughness: 0.3
+        });
+        const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+        hub.position.set(0, 4, 0);
+        hub.castShadow = true;
+        scene.add(hub);
+        
+        // Windows on hub
+        for (let i = 0; i < 6; i++) {
+            const windowGeometry = new THREE.CircleGeometry(0.8, 16);
+            const windowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00d5ff,
+                transparent: true,
+                opacity: 0.6
+            });
+            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+            const angle = (i / 6) * Math.PI * 2;
+            window.position.set(Math.cos(angle) * 3.1, 4, Math.sin(angle) * 3.1);
+            window.rotation.y = -angle + Math.PI / 2;
+            scene.add(window);
+        }
+        
+        // Support pillars
+        for (let i = 0; i < 4; i++) {
+            const pillarGeometry = new THREE.CylinderGeometry(0.3, 0.3, 8, 8);
+            const pillarMaterial = new THREE.MeshStandardMaterial({
+                color: 0x666677,
+                metalness: 0.8,
+                roughness: 0.4
+            });
+            const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+            pillar.position.set(Math.cos(angle) * 8, 4, Math.sin(angle) * 8);
+            pillar.castShadow = true;
+            scene.add(pillar);
+        }
+        
+        // Floating solar panels
+        for (let i = 0; i < 6; i++) {
+            const panelGeometry = new THREE.BoxGeometry(4, 0.1, 2);
+            const panelMaterial = new THREE.MeshStandardMaterial({
+                color: 0x111122,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+            panel.position.set(
+                (Math.random() - 0.5) * 30,
+                3 + Math.random() * 5,
+                (Math.random() - 0.5) * 30
+            );
+            panel.rotation.x = Math.random() * Math.PI;
+            panel.rotation.y = Math.random() * Math.PI;
+            scene.add(panel);
+            
+            // Animation data
+            panel.userData = {
+                rotSpeed: 0.001 + Math.random() * 0.002,
+                floatSpeed: 0.001 + Math.random() * 0.002,
+                floatOffset: Math.random() * Math.PI * 2
+            };
+            state.stars.push(panel); // Reuse stars array for animated objects
+        }
+        
+        // ============================================
+        // RETURN PORTAL
+        // ============================================
+        
+        const portalGroup = new THREE.Group();
+        portalGroup.position.set(0, 2, -8);
+        scene.add(portalGroup);
+        
+        // Portal ring (blue/cyan for space)
+        const torusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const torusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00d5ff,
+            emissive: 0x00d5ff,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const portalRing = new THREE.Mesh(torusGeometry, torusMaterial);
+        portalGroup.add(portalRing);
+        
+        // Portal inner
+        const portalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const portalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00d5ff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const portalInner = new THREE.Mesh(portalInnerGeometry, portalInnerMaterial);
+        portalGroup.add(portalInner);
+        
+        // Portal glow
+        const portalGlow = new THREE.PointLight(0x00d5ff, 2, 20);
+        portalGlow.position.set(0, 0, 0);
+        portalGroup.add(portalGlow);
+        
+        // Portal label
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#00d5ff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+        
+        const portalLabel = createTextSprite('→ Lobby World');
+        portalLabel.position.set(0, 3.5, 0);
+        portalGroup.add(portalLabel);
+        
+        // Portal particles
+        function createPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00d5ff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            portalGroup.add(particles);
+            return particles;
+        }
+        
+        const portalParticles = createPortalParticles();
+        
+        // ============================================
+        // AGENT (Player)
+        // ============================================
+        
+        const agentGroup = new THREE.Group();
+        agentGroup.position.set(0, 0.5, 8);
+        scene.add(agentGroup);
+        
+        // Spawn world items
+        spawnWorldItems(scene);
+        
+        // Body (cylinder)
+        const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            roughness: 0.3,
+            metalness: 0.7
+        });
+        const agentBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        agentBody.position.y = 0.5;
+        agentBody.castShadow = true;
+        agentGroup.add(agentBody);
+        
+        // Top cap
+        const topCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            bodyMaterial
+        );
+        topCap.position.y = 1.0;
+        agentGroup.add(topCap);
+        
+        // Bottom cap
+        const bottomCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            bodyMaterial
+        );
+        bottomCap.position.y = 0.0;
+        agentGroup.add(bottomCap);
+        
+        // Agent glow
+        const agentGlow = new THREE.PointLight(0xff3333, 0.5, 3);
+        agentGlow.position.y = 0.5;
+        agentGroup.add(agentGlow);
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        const keys = {};
+        const agentSpeed = 0.08;
+        const agentVelocity = new THREE.Vector3();
+        let jumpVelocity = 0;
+        const gravity = -0.002;  // Moon gravity - much lower
+        const jumpStrength = 0.35;  // Higher jump
+        let isGrounded = true;
+        let lastFootstepTime = 0;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && isGrounded) {
+                jumpVelocity = jumpStrength;
+                isGrounded = false;
+            }
+            if (e.code === 'KeyI') {
+                inventory.toggle();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mouse look - click and drag
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.3;
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - previousMouseX;
+            const deltaY = e.clientY - previousMouseY;
+            
+            cameraAngleX -= deltaX * 0.005;
+            cameraAngleY += deltaY * 0.005;
+            
+            cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
+            
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        function updateAgentMovement() {
+            const forward = new THREE.Vector3(0, 0, -1);
+            const right = new THREE.Vector3(1, 0, 0);
+            
+            forward.applyQuaternion(camera.quaternion);
+            right.applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            agentVelocity.set(0, 0, 0);
+            
+            if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyS']) agentVelocity.add(forward.multiplyScalar(-agentSpeed));
+            if (keys['KeyA']) agentVelocity.add(right.multiplyScalar(-agentSpeed));
+            if (keys['KeyD']) agentVelocity.add(right.multiplyScalar(agentSpeed));
+            
+            // Play footstep sound when moving
+            const isMoving = agentVelocity.length() > 0;
+            if (isMoving && isGrounded) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 400) {
+                    playSound('footstep');
+                    lastFootstepTime = now;
+                }
+            }
+            
+            agentGroup.position.x += agentVelocity.x;
+            agentGroup.position.z += agentVelocity.z;
+            
+            // COLLISION DETECTION WITH OBJECTS
+            
+            // 1. Central Hub collision (cylinder at 0,4,0, radius 3, height 8)
+            const distToHub = Math.sqrt(agentGroup.position.x ** 2 + agentGroup.position.z ** 2);
+            if (distToHub < 3.5 && agentGroup.position.y < 8.5) {
+                // Push player outside hub
+                const angle = Math.atan2(agentGroup.position.z, agentGroup.position.x);
+                agentGroup.position.x = Math.cos(angle) * 3.5;
+                agentGroup.position.z = Math.sin(angle) * 3.5;
+            }
+            
+            // 2. Support Pillars collision (4 pillars at diagonal positions)
+            const pillarPositions = [
+                {x: Math.cos(Math.PI/4) * 8, z: Math.sin(Math.PI/4) * 8},      // 45°
+                {x: Math.cos(3*Math.PI/4) * 8, z: Math.sin(3*Math.PI/4) * 8},  // 135°
+                {x: Math.cos(5*Math.PI/4) * 8, z: Math.sin(5*Math.PI/4) * 8},  // 225°
+                {x: Math.cos(7*Math.PI/4) * 8, z: Math.sin(7*Math.PI/4) * 8}   // 315°
+            ];
+            for (const pillar of pillarPositions) {
+                const distToPillar = Math.sqrt(
+                    (agentGroup.position.x - pillar.x) ** 2 + 
+                    (agentGroup.position.z - pillar.z) ** 2
+                );
+                // Pillar radius 0.3, add buffer for player size
+                if (distToPillar < 1.0 && agentGroup.position.y < 8.5) {
+                    const angle = Math.atan2(agentGroup.position.z - pillar.z, agentGroup.position.x - pillar.x);
+                    agentGroup.position.x = pillar.x + Math.cos(angle) * 1.0;
+                    agentGroup.position.z = pillar.z + Math.sin(angle) * 1.0;
+                }
+            }
+            
+            // 3. Solar Panels collision (floating boxes)
+            // Simple collision - treat as spheres at their positions
+            const solarPanelPositions = [];
+            scene.traverse((obj) => {
+                if (obj.geometry && obj.geometry.type === 'BoxGeometry' && obj !== floor && obj !== hub) {
+                    const dist = Math.sqrt(
+                        (agentGroup.position.x - obj.position.x) ** 2 +
+                        (agentGroup.position.z - obj.position.z) ** 2
+                    );
+                    const heightDiff = Math.abs(agentGroup.position.y - obj.position.y);
+                    // Box is 4x0.1x2, approximate as cylinder radius 2
+                    if (dist < 2.5 && heightDiff < 2) {
+                        const angle = Math.atan2(agentGroup.position.z - obj.position.z, agentGroup.position.x - obj.position.x);
+                        agentGroup.position.x = obj.position.x + Math.cos(angle) * 2.5;
+                        agentGroup.position.z = obj.position.z + Math.sin(angle) * 2.5;
+                    }
+                }
+            });
+            
+            // Low gravity jump (moon physics)
+            agentGroup.position.y += jumpVelocity;
+            jumpVelocity += gravity;
+            
+            // Ground collision
+            if (agentGroup.position.y <= 0.5) {
+                agentGroup.position.y = 0.5;
+                jumpVelocity = 0;
+                isGrounded = true;
+            }
+            
+            // Camera follow
+            
+            // Play footstep sound when moving
+            if (isMoving && isGrounded) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 400) {
+                    playSound('footstep');
+                    lastFootstepTime = now;
+                }
+            }
+            
+            camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
+            camera.lookAt(agentGroup.position);
+            
+            // Portal collision
+            const distance = agentGroup.position.distanceTo(portalGroup.position);
+            if (distance < 2.5 && !state.transitioning) {
+                state.transitioning = true;
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Trigger transition
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    inventory.save();
+                    window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        let frame = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            frame++;
+            
+            // Rotate portal
+            portalRing.rotation.z -= 0.01;
+            portalInner.rotation.z += 0.005;
+            
+            // Animate portal particles
+            const portalPos = portalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                portalPos[i * 3 + 1] += 0.02;
+                if (portalPos[i * 3 + 1] > 1.5) {
+                    portalPos[i * 3 + 1] = -1.5;
+                }
+            }
+            portalParticles.geometry.attributes.position.needsUpdate = true;
+            portalParticles.rotation.y += 0.002;
+            
+            // Slowly rotate stars
+            stars.rotation.y += 0.0002;
+            
+            // Animate floating solar panels
+            state.stars.forEach((obj, i) => {
+                if (obj.userData) {
+                    obj.rotation.x += obj.userData.rotSpeed;
+                    obj.rotation.y += obj.userData.rotSpeed;
+                    obj.position.y += Math.sin(frame * obj.userData.floatSpeed + obj.userData.floatOffset) * 0.01;
+                }
+            });
+            
+            // Update burst particles
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.life--;
+                
+                const pos = p.mesh.geometry.attributes.position.array;
+                for (let j = 0; j < p.velocities.length; j++) {
+                    pos[j * 3] += p.velocities[j].x;
+                    pos[j * 3 + 1] += p.velocities[j].y;
+                    pos[j * 3 + 2] += p.velocities[j].z;
+                    p.velocities[j].y -= 0.005;
+                }
+                p.mesh.geometry.attributes.position.needsUpdate = true;
+                p.mesh.material.opacity = p.life / 60;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    state.particles.splice(i, 1);
+                }
+            }
+            
+            updateAgentMovement();
+            
+            // Check item collection
+            if (agentGroup) {
+                checkItemCollection(agentGroup.position);
+            }
+            
+            // Animate items
+            itemMeshes.forEach(mesh => {
+                mesh.rotation.y += 0.02;
+                mesh.position.y = 1.5 + Math.sin(Date.now() * 0.002 + mesh.position.x) * 0.2;
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        // Fade out overlay
+        setTimeout(() => {
+            document.getElementById('arrival-overlay').classList.add('fade-out');
+            document.getElementById('arrival-text').classList.add('fade-out');
+        }, 500);
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        animate();
+    </script>
+</body>
+</html>

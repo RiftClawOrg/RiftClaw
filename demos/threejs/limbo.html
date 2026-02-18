@@ -1,0 +1,833 @@
+<!--
+    RiftClaw Limbo - Local Cross-Server Lobby
+    Connects local browser worlds to Replit-hosted relay
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiftClaw Limbo - Local Lobby</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #888;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            z-index: 100;
+            max-width: 300px;
+        }
+        
+        #ui h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            color: #aaa;
+        }
+        
+        #status {
+            font-size: 0.9rem;
+            margin: 5px 0;
+        }
+        
+        #status.connected { color: #0f0; }
+        #status.connecting { color: #ff0; }
+        #status.disconnected { color: #f00; }
+        
+        #log {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .log-entry.sent { color: #0ff; }
+        .log-entry.received { color: #0f0; }
+        .log-entry.error { color: #f00; }
+        
+        #inventory-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #aaa;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #666;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(100, 100, 100, 0.3);
+        }
+        
+        #inventory-panel h3 {
+            margin: 0 0 10px 0;
+            text-align: center;
+        }
+        
+        #portals-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #aaa;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            width: 250px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        
+        #portals-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+        }
+        
+        .portal-info {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(100, 100, 100, 0.2);
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #666;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            z-index: 100;
+        }
+        
+        kbd {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #555;
+        }
+        
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+        
+        #transition-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #aaa;
+            font-size: 2rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 20px rgba(170, 170, 170, 0.5);
+        }
+        
+        #transition-text.active {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="inventory-panel" style="display:none;">
+        <h3>🎒 Inventory</h3>
+        <div style="font-size:0.8rem;color:#666;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
+        <div id="inventory"><div style="color:#666">Empty</div></div>
+    </div>
+    
+    <div id="portals-panel">
+        <h3>🌀 Discovered Portals</h3>
+        <div id="portal-list"><div style="color:#666;font-size:0.85rem;">Connecting to relay...</div></div>
+    </div>
+    
+    <div id="transition-overlay"></div>
+    <div id="transition-text">
+        <div>🌀 Crossing the Rift...</div>
+        <div style="font-size:1rem;color:#666;margin-top:10px">Transferring to remote world</div>
+    </div>
+    
+    <div id="canvas-container"></div>
+    
+    <div id="ui">
+        <h1>🏛️ Limbo - Local Lobby</h1>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div id="log"></div>
+    </div>
+    
+    <div id="controls">
+        <strong>Controls:</strong><br>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move<br>
+        <kbd>SPACE</kbd> - Jump<br>
+        <kbd>I</kbd> - Inventory<br>
+        Walk into portal to cross servers
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // RIFTCLAW LIMBO - LOCAL CROSS-SERVER LOBBY
+        // ============================================
+        
+        // Relay configuration
+        const RELAY_URL = 'wss://rift-claw--riftclaw.replit.app';
+        
+        // ============================================
+        // INVENTORY SYSTEM
+        // ============================================
+        
+        const inventory = {
+            items: [],
+            maxSlots: 8,
+            
+            add(item) {
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    existing.quantity += item.quantity || 1;
+                    this.save();
+                    this.updateUI();
+                    return true;
+                }
+                if (this.items.length >= this.maxSlots) {
+                    log('Inventory full!', 'error');
+                    return false;
+                }
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: item.quantity || 1,
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                log(`Added ${item.name} to inventory`, 'info');
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Removed ${item.name} from inventory`, 'info');
+                    return item;
+                }
+                return null;
+            },
+            
+            get() { return this.items; },
+            toJSON() { return JSON.stringify(this.items); },
+            fromJSON(json) {
+                try { this.items = JSON.parse(json) || []; } catch(e) { this.items = []; }
+            },
+            save() { localStorage.setItem('riftclaw_inventory', this.toJSON()); },
+            load() {
+                const saved = localStorage.getItem('riftclaw_inventory');
+                if (saved) this.fromJSON(saved);
+                // Check URL params for handoff
+                const urlParams = new URLSearchParams(window.location.search);
+                const handoffInv = urlParams.get('inventory');
+                if (handoffInv) {
+                    this.fromJSON(decodeURIComponent(handoffInv));
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    log('Received inventory from remote world!', 'received');
+                }
+                this.updateUI();
+            },
+            
+            updateUI() {
+                const invEl = document.getElementById('inventory');
+                if (invEl) {
+                    if (this.items.length === 0) {
+                        invEl.innerHTML = '<div style="color:#666">Empty</div>';
+                    } else {
+                        invEl.innerHTML = this.items.map(item => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:4px;background:rgba(0,0,0,0.3);border-radius:4px;margin:2px 0;">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1">${item.name}</span>
+                                <span style="color:#888">x${item.quantity}</span>
+                            </div>
+                        `).join('');
+                    }
+                }
+            },
+            
+            toggle() {
+                const panel = document.getElementById('inventory-panel');
+                if (panel) {
+                    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+        };
+        
+        // Initialize inventory
+        inventory.load();
+        
+        // Spawn some test items
+        if (inventory.get().length === 0) {
+            inventory.add({ name: 'Limbo Shard', type: 'material', icon: '💎', world: 'limbo' });
+            inventory.add({ name: 'Void Essence', type: 'magic', icon: '🌑', world: 'limbo' });
+        }
+        
+        // ============================================
+        // STATE & LOGGING
+        // ============================================
+        
+        const state = {
+            ws: null,
+            connected: false,
+            agentId: 'limbo-' + Math.random().toString(36).substr(2, 9),
+            agentName: 'LimboWalker',
+            portals: [],
+            portalMeshes: [],
+            inPortal: false,
+            handoffPending: false
+        };
+        
+        function log(msg, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type}] ${msg}`);
+        }
+        
+        function setStatus(text, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = `status ${className}`;
+        }
+        
+        // ============================================
+        // WEBSOCKET - RIFTCLAW PROTOCOL
+        // ============================================
+        
+        function connectToRelay() {
+            log(`Connecting to relay at ${RELAY_URL}...`);
+            setStatus('Connecting...', 'connecting');
+            
+            try {
+                state.ws = new WebSocket(RELAY_URL);
+                
+                state.ws.onopen = () => {
+                    log('Connected to relay!', 'received');
+                    setStatus('Connected', 'connected');
+                    state.connected = true;
+                    
+                    // Register this world
+                    sendMessage('register_world', {
+                        world_name: 'limbo',
+                        world_url: window.location.href,
+                        display_name: 'Local Limbo'
+                    });
+                    
+                    // Discover portals
+                    setTimeout(sendDiscover, 500);
+                };
+                
+                state.ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        handleMessage(msg);
+                    } catch (e) {
+                        log('Failed to parse message', 'error');
+                    }
+                };
+                
+                state.ws.onclose = () => {
+                    log('Disconnected from relay', 'error');
+                    setStatus('Disconnected', 'disconnected');
+                    state.connected = false;
+                    
+                    // Retry connection
+                    setTimeout(connectToRelay, 5000);
+                };
+                
+                state.ws.onerror = (err) => {
+                    log('WebSocket error', 'error');
+                };
+            } catch (e) {
+                log(`Failed to connect: ${e.message}`, 'error');
+                setTimeout(connectToRelay, 5000);
+            }
+        }
+        
+        function sendMessage(type, payload = {}) {
+            if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const msg = {
+                type,
+                agent_id: state.agentId,
+                timestamp: Date.now() / 1000,
+                ...payload
+            };
+            
+            state.ws.send(JSON.stringify(msg));
+            log(`Sent: ${type}`, 'sent');
+        }
+        
+        function sendDiscover() {
+            sendMessage('discover');
+        }
+        
+        // ============================================
+        // MESSAGE HANDLING
+        // ============================================
+        
+        function handleMessage(msg) {
+            log(`Received: ${msg.type}`, 'received');
+            
+            switch (msg.type) {
+                case 'welcome':
+                    log(`Welcome to ${msg.world_name}`);
+                    break;
+                    
+                case 'discover_response':
+                    handleDiscoverResponse(msg);
+                    break;
+                    
+                case 'handoff_confirm':
+                    handleHandoffConfirm(msg);
+                    break;
+                    
+                case 'handoff_rejected':
+                    log(`Handoff rejected: ${msg.reason}`, 'error');
+                    state.handoffPending = false;
+                    break;
+                    
+                case 'error':
+                    log(`Error: ${msg.message}`, 'error');
+                    break;
+            }
+        }
+        
+        function handleDiscoverResponse(msg) {
+            if (msg.portals && msg.portals.length > 0) {
+                state.portals = msg.portals;
+                log(`Discovered ${msg.portals.length} portal(s)`);
+                updatePortalList();
+                spawnPortals();
+            } else {
+                log('No portals discovered');
+            }
+        }
+        
+        function updatePortalList() {
+            const listEl = document.getElementById('portal-list');
+            if (state.portals.length === 0) {
+                listEl.innerHTML = '<div style="color:#666;font-size:0.85rem;">No portals found</div>';
+                return;
+            }
+            
+            listEl.innerHTML = state.portals.map(p => `
+                <div class="portal-info">
+                    <strong>${p.name}</strong><br>
+                    <span style="color:#888;font-size:0.8rem;">→ ${p.destination_world}</span>
+                </div>
+            `).join('');
+        }
+        
+        function spawnPortals() {
+            // Clear existing portals
+            state.portalMeshes.forEach(p => scene.remove(p.mesh));
+            state.portalMeshes = [];
+            
+            // Spawn portals in a circle
+            const radius = 8;
+            state.portals.forEach((portal, index) => {
+                const angle = (index / state.portals.length) * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                
+                spawnPortal(portal, x, z);
+            });
+        }
+        
+        function spawnPortal(portalData, x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 1.5, z);
+            
+            // Portal ring
+            const ringGeo = new THREE.TorusGeometry(1.5, 0.2, 16, 100);
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: 0x666666,
+                emissive: 0x444444,
+                emissiveIntensity: 0.5,
+                transparent: true,
+                opacity: 0.9
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            group.add(ring);
+            
+            // Inner glow
+            const innerGeo = new THREE.CircleGeometry(1.3, 32);
+            const innerMat = new THREE.MeshBasicMaterial({
+                color: 0x888888,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            const inner = new THREE.Mesh(innerGeo, innerMat);
+            group.add(inner);
+            
+            // Label
+            const label = createTextSprite(portalData.name);
+            label.position.set(0, 2.5, 0);
+            group.add(label);
+            
+            scene.add(group);
+            
+            state.portalMeshes.push({
+                mesh: group,
+                data: portalData,
+                ring: ring,
+                inner: inner
+            });
+        }
+        
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(0, 0, 512, 128);
+            
+            ctx.font = 'bold 32px Arial';
+            ctx.fillStyle = '#aaa';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 256, 75);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(4, 1, 1);
+            
+            return sprite;
+        }
+        
+        function sendHandoffRequest(portal) {
+            if (state.handoffPending) return;
+            
+            state.handoffPending = true;
+            log('Initiating cross-server handoff...');
+            
+            const passport = {
+                agent_id: state.agentId,
+                agent_name: state.agentName,
+                source_world: 'limbo',
+                source_url: window.location.href,
+                target_world: portal.destination_world,
+                target_url: portal.destination_url,
+                position: { x: agentGroup.position.x, y: agentGroup.position.y, z: agentGroup.position.z },
+                inventory: inventory.toJSON(),
+                inventory_hash: btoa(inventory.toJSON()).substr(0, 16),
+                memory_summary: `Crossing from Limbo to ${portal.destination_world}`,
+                reputation: 5.0,
+                timestamp: Date.now() / 1000,
+                nonce: Math.random().toString(36).substr(2, 9)
+            };
+            
+            sendMessage('handoff_request', {
+                portal_id: portal.portal_id || portal.id,
+                passport
+            });
+        }
+        
+        function handleHandoffConfirm(msg) {
+            log('Handoff confirmed! Opening remote world...', 'received');
+            
+            const overlay = document.getElementById('transition-overlay');
+            const text = document.getElementById('transition-text');
+            
+            overlay.classList.add('active');
+            text.classList.add('active');
+            
+            // Get target URL from passport
+            const passport = msg.passport;
+            const targetUrl = passport?.target_url || msg.target_url;
+            
+            if (targetUrl) {
+                setTimeout(() => {
+                    // Open in new tab or redirect
+                    window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
+                    
+                    // Reset
+                    state.handoffPending = false;
+                    overlay.classList.remove('active');
+                    text.classList.remove('active');
+                }, 2000);
+            } else {
+                log('No target URL provided!', 'error');
+                state.handoffPending = false;
+                overlay.classList.remove('active');
+                text.classList.remove('active');
+            }
+        }
+        
+        // ============================================
+        // THREE.JS SCENE - LIMBO WORLD
+        // ============================================
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.03);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 10);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0x666666, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+        
+        // Floor - simple gray plane
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0x2a2a3e,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x333333);
+        scene.add(gridHelper);
+        
+        // Player (red capsule)
+        const agentGroup = new THREE.Group();
+        agentGroup.position.y = 0;
+        scene.add(agentGroup);
+        
+        const bodyGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xaa3333 });
+        const agentBody = new THREE.Mesh(bodyGeo, bodyMat);
+        agentBody.position.y = 0.8;
+        agentGroup.add(agentBody);
+        
+        const headGeo = new THREE.SphereGeometry(0.3, 16, 16);
+        const head = new THREE.Mesh(headGeo, bodyMat);
+        head.position.y = 1.5;
+        agentGroup.add(head);
+        
+        // ============================================
+        // CONTROLS & MOVEMENT
+        // ============================================
+        
+        const keys = {};
+        const agentSpeed = 0.1;
+        const agentVelocity = new THREE.Vector3();
+        let jumpVelocity = 0;
+        const gravity = -0.02;
+        const jumpStrength = 0.4;
+        let isGrounded = true;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space' && isGrounded) {
+                jumpVelocity = jumpStrength;
+                isGrounded = false;
+            }
+            if (e.code === 'KeyI') {
+                inventory.toggle();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mouse look
+        let isDragging = false;
+        let previousMouseX = 0;
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.3;
+        
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#ui, #controls, #portals-panel, #inventory-panel')) return;
+            isDragging = true;
+            previousMouseX = e.clientX;
+        });
+        
+        document.addEventListener('mouseup', () => isDragging = false);
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - previousMouseX;
+            cameraAngleX -= deltaX * 0.01;
+            previousMouseX = e.clientX;
+        });
+        
+        function updateAgentMovement() {
+            // Movement relative to camera
+            const forward = new THREE.Vector3(
+                Math.sin(cameraAngleX),
+                0,
+                Math.cos(cameraAngleX)
+            );
+            const right = new THREE.Vector3(
+                Math.sin(cameraAngleX + Math.PI / 2),
+                0,
+                Math.cos(cameraAngleX + Math.PI / 2)
+            );
+            
+            agentVelocity.x = 0;
+            agentVelocity.z = 0;
+            
+            if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyS']) agentVelocity.sub(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyA']) agentVelocity.sub(right.multiplyScalar(agentSpeed));
+            if (keys['KeyD']) agentVelocity.add(right.multiplyScalar(agentSpeed));
+            
+            // Apply gravity
+            if (!isGrounded) {
+                jumpVelocity += gravity;
+            }
+            
+            // Update position
+            agentGroup.position.x += agentVelocity.x;
+            agentGroup.position.z += agentVelocity.z;
+            agentGroup.position.y += jumpVelocity;
+            
+            // Ground collision
+            if (agentGroup.position.y <= 0) {
+                agentGroup.position.y = 0;
+                jumpVelocity = 0;
+                isGrounded = true;
+            }
+            
+            // Camera follow
+            camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
+            camera.lookAt(agentGroup.position);
+        }
+        
+        // ============================================
+        // PORTAL COLLISION
+        // ============================================
+        
+        function checkPortalCollision() {
+            const agentPos = agentGroup.position.clone();
+            
+            state.portalMeshes.forEach(portal => {
+                const portalPos = portal.mesh.position.clone();
+                const distance = agentPos.distanceTo(portalPos);
+                
+                if (distance < 2.0 && !state.inPortal && !state.handoffPending) {
+                    state.inPortal = true;
+                    log(`Entering portal: ${portal.data.name}`);
+                    sendHandoffRequest(portal.data);
+                } else if (distance >= 2.5) {
+                    state.inPortal = false;
+                }
+            });
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Animate portals
+            state.portalMeshes.forEach((portal, i) => {
+                portal.ring.rotation.z += 0.01 * (i % 2 === 0 ? 1 : -1);
+                portal.inner.rotation.z -= 0.005;
+                portal.mesh.position.y = 1.5 + Math.sin(Date.now() * 0.001 + i) * 0.1;
+            });
+            
+            updateAgentMovement();
+            checkPortalCollision();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Start
+        connectToRelay();
+        animate();
+        
+        log('Limbo initialized. Waiting for relay connection...');
+    </script>
+</body>
+</html>

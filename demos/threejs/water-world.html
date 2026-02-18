@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiftClaw - Water World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #001133;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00aaff;
+            background: rgba(0, 20, 40, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #00aaff;
+            max-width: 350px;
+            z-index: 100;
+        }
+        
+        #ui h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00aaff;
+        }
+        
+        #ui .status {
+            font-size: 0.9rem;
+            color: #88ccff;
+        }
+        
+        #return-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #00aaff;
+            color: #001133;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        #return-btn:hover {
+            background: #0088cc;
+            box-shadow: 0 0 20px #00aaff;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #88ccff;
+            font-size: 0.8rem;
+            background: rgba(0, 20, 40, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #controls kbd {
+            background: #003366;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fff;
+        }
+        
+        #arrival-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #001133 100%);
+            opacity: 1;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #arrival-overlay.fade-out {
+            opacity: 0;
+        }
+        
+        #arrival-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00aaff;
+            font-size: 2.5rem;
+            text-align: center;
+            opacity: 1;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 30px #00aaff;
+        }
+        
+        #arrival-text.fade-out {
+            opacity: 0;
+        }
+        
+        #transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle, transparent 0%, #001133 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+            z-index: 1000;
+        }
+        
+        #transition-overlay.active {
+            opacity: 1;
+        }
+        
+        #transition-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00aaff;
+            font-size: 2.5rem;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 1001;
+            text-shadow: 0 0 30px #00aaff;
+        }
+        
+        #transition-text.active {
+            opacity: 1;
+        }
+        
+        #mute-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #00aaff;
+            color: #00aaff;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            z-index: 100;
+        }
+        
+        #mute-btn:hover {
+            background: #00aaff;
+            color: #001133;
+        }
+        
+        #inventory-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00aaff;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #00aaff;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 0 30px rgba(0, 170, 255, 0.3);
+        }
+        
+        #inventory-panel h3 {
+            margin: 0 0 10px 0;
+            font-size: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="inventory-panel">
+        <h3>🎒 Inventory</h3>
+        <div style="font-size:0.8rem;color:#888;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
+        <div id="inventory"><div style="color:#666">Empty</div></div>
+    </div>
+    <div id="canvas-container"></div>
+    
+    <div id="ui">
+        <h1>🌊 Water World</h1>
+        <div class="status">Deep beneath the waves...</div>
+        <button id="return-btn" onclick="returnToLobby()">🌀 Return to Lobby</button>
+    </div>
+    
+    <div id="controls">
+        <strong>Controls:</strong><br>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - Move (slow underwater)<br>
+        <kbd>SPACE</kbd> - Swim up<br>
+        <kbd>SHIFT</kbd> - Swim down<br>
+        <kbd>Click+Drag</kbd> - Rotate camera<br>
+        Walk into portal to return
+    </div>
+    
+    <button id="mute-btn" onclick="toggleMute()">🔊</button>
+    
+    <div id="arrival-overlay"></div>
+    <div id="arrival-text">
+        <div>🌊 WATER WORLD</div>
+        <div style="font-size:1rem;color:#88ccff;margin-top:10px">Underwater Zone</div>
+    </div>
+    
+    <div id="transition-overlay"></div>
+    <div id="transition-text">
+        <div>🌀 RETURNING</div>
+        <div style="font-size:1rem;color:#88ccff;margin-top:10px">To Lobby World</div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // RIFTCLAW - WATER WORLD
+        // ============================================
+        
+        // ============================================
+        // INVENTORY SYSTEM
+        // ============================================
+        
+        const inventory = {
+            items: [],
+            maxSlots: 8,
+            
+            add(item) {
+                const existing = this.items.find(i => i.name === item.name);
+                if (existing) {
+                    existing.quantity += item.quantity || 1;
+                    this.save();
+                    this.updateUI();
+                    return true;
+                }
+                if (this.items.length >= this.maxSlots) return false;
+                this.items.push({
+                    id: item.id || Date.now().toString(),
+                    name: item.name || 'Unknown Item',
+                    type: item.type || 'misc',
+                    icon: item.icon || '📦',
+                    quantity: item.quantity || 1,
+                    world: item.world || 'unknown'
+                });
+                this.save();
+                this.updateUI();
+                return true;
+            },
+            
+            remove(itemId) {
+                const idx = this.items.findIndex(i => i.id === itemId);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    return item;
+                }
+                return null;
+            },
+            
+            get() { return this.items; },
+            toJSON() { return JSON.stringify(this.items); },
+            fromJSON(json) {
+                try { this.items = JSON.parse(json) || []; } catch(e) { this.items = []; }
+            },
+            save() { localStorage.setItem('riftclaw_inventory', this.toJSON()); },
+            load() {
+                const saved = localStorage.getItem('riftclaw_inventory');
+                if (saved) this.fromJSON(saved);
+                const urlParams = new URLSearchParams(window.location.search);
+                const handoffInv = urlParams.get('inventory');
+                if (handoffInv) {
+                    this.fromJSON(decodeURIComponent(handoffInv));
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+                this.consolidate();
+                this.updateUI();
+            },
+            
+            consolidate() {
+                const consolidated = [];
+                this.items.forEach(item => {
+                    const existing = consolidated.find(i => i.name === item.name);
+                    if (existing) {
+                        existing.quantity += item.quantity;
+                    } else {
+                        consolidated.push({...item});
+                    }
+                });
+                this.items = consolidated;
+                this.save();
+            },
+            
+            updateUI() {
+                const invEl = document.getElementById('inventory');
+                if (invEl) {
+                    if (this.items.length === 0) {
+                        invEl.innerHTML = '<div style="color:#666">Empty</div>';
+                    } else {
+                        invEl.innerHTML = this.items.map((item, index) => `
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px;background:rgba(0,0,0,0.4);border-radius:4px;margin:4px 0;border:1px solid rgba(0,170,255,0.2);">
+                                <span style="font-size:1.2rem">${item.icon}</span>
+                                <span style="flex:1">${item.name}</span>
+                                <span style="color:#888;margin-right:8px;">x${item.quantity}</span>
+                                <button onclick="inventory.dropByName('${item.name}')" style="background:#ff3333;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;">🗑️</button>
+                            </div>
+                        `).join('');
+                    }
+                }
+            },
+            
+            dropByName(itemName) {
+                const idx = this.items.findIndex(i => i.name === itemName);
+                if (idx >= 0) {
+                    const item = this.items[idx];
+                    this.items.splice(idx, 1);
+                    this.save();
+                    this.updateUI();
+                    log(`Dropped ${item.name}`);
+                    this.toggle();
+                }
+            },
+            
+            toggle() {
+                const panel = document.getElementById('inventory-panel');
+                if (panel) {
+                    const isHidden = panel.style.display === 'none';
+                    panel.style.display = isHidden ? 'block' : 'none';
+                }
+            }
+        };
+        
+        inventory.load();
+        
+        // ============================================
+        // WORLD ITEMS SYSTEM
+        // ============================================
+        
+        const worldItems = {
+            water: [
+                { id: 'water_1', name: 'Pearl', type: 'treasure', icon: '🦪', world: 'water', x: 6, z: 6, collected: false },
+                { id: 'water_2', name: 'Coral Branch', type: 'material', icon: '🪸', world: 'water', x: -6, z: 6, collected: false },
+                { id: 'water_3', name: 'Sea Shell', type: 'material', icon: '🐚', world: 'water', x: 6, z: -6, collected: false },
+                { id: 'water_4', name: 'Kraken Ink', type: 'magic', icon: '🦑', world: 'water', x: -6, z: -6, collected: false },
+                { id: 'water_5', name: 'Atlantis Key', type: 'key', icon: '🔱', world: 'water', x: 0, z: 8, collected: false }
+            ]
+        };
+        
+        let itemMeshes = [];
+        
+        function loadWorldItems() {
+            const saved = localStorage.getItem('riftclaw_world_items');
+            if (saved) {
+                const data = JSON.parse(saved);
+                Object.assign(worldItems, data);
+            }
+        }
+        
+        function saveWorldItems() {
+            localStorage.setItem('riftclaw_world_items', JSON.stringify(worldItems));
+        }
+        
+        function spawnWorldItems(scene) {
+            loadWorldItems();
+            const worldName = 'water';
+            if (!worldItems[worldName]) return;
+            
+            const createGeometry = (type) => {
+                switch(type) {
+                    case 'treasure': return new THREE.SphereGeometry(0.25, 16, 16);
+                    case 'material': return new THREE.DodecahedronGeometry(0.3, 0);
+                    case 'magic': return new THREE.TetrahedronGeometry(0.35, 0);
+                    case 'key': return new THREE.TorusGeometry(0.25, 0.1, 8, 16);
+                    default: return new THREE.OctahedronGeometry(0.3, 0);
+                }
+            };
+            
+            worldItems[worldName].forEach(item => {
+                if (item.collected) return;
+                const geometry = createGeometry(item.type);
+                const material = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.8 });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(item.x, 1.5, item.z);
+                mesh.userData = { itemId: item.id, itemData: item };
+                
+                const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x00aaff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = -0.3;
+                mesh.add(ring);
+                
+                scene.add(mesh);
+                itemMeshes.push(mesh);
+            });
+        }
+        
+        function checkItemCollection(agentPos) {
+            itemMeshes.forEach((mesh, index) => {
+                if (!mesh.parent) return;
+                const distance = agentPos.distanceTo(mesh.position);
+                if (distance < 1.5) {
+                    const item = mesh.userData.itemData;
+                    if (inventory.add(item)) {
+                        item.collected = true;
+                        saveWorldItems();
+                        scene.remove(mesh);
+                        itemMeshes.splice(index, 1);
+                        log(`Picked up ${item.name}!`);
+                    }
+                }
+            });
+        }
+        
+        const state = {
+            particles: [],
+            bubbles: [],
+            fish: [],
+            arriving: true,
+            transitioning: false,
+            audioMuted: false
+        };
+        
+        // Audio Context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function createFootstepSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(80, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+        
+        function createPortalSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.5);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        // ============================================
+        // AMBIENT MUSIC - Water World (Flowing/Underwater)
+        // ============================================
+        let ambientOscillators = [];
+        let ambientGain = null;
+        let isMusicPlaying = false;
+        
+        function startAmbientMusic() {
+            if (isMusicPlaying || state.audioMuted) return;
+            isMusicPlaying = true;
+            
+            ambientGain = audioContext.createGain();
+            ambientGain.gain.value = 0.08;
+            ambientGain.connect(audioContext.destination);
+            
+            // Deep water drone
+            const waterOsc = audioContext.createOscillator();
+            waterOsc.type = 'sine';
+            waterOsc.frequency.value = 80;
+            const waterFilter = audioContext.createBiquadFilter();
+            waterFilter.type = 'lowpass';
+            waterFilter.frequency.value = 200;
+            const waterGain = audioContext.createGain();
+            waterGain.gain.value = 0.3;
+            
+            // Flowing LFO
+            const flowLFO = audioContext.createOscillator();
+            flowLFO.type = 'sine';
+            flowLFO.frequency.value = 0.3;
+            const flowLFOGain = audioContext.createGain();
+            flowLFOGain.gain.value = 0.1;
+            flowLFO.connect(flowLFOGain);
+            flowLFOGain.connect(waterFilter.frequency);
+            flowLFO.start();
+            
+            waterOsc.connect(waterFilter);
+            waterFilter.connect(waterGain);
+            waterGain.connect(ambientGain);
+            waterOsc.start();
+            ambientOscillators.push(waterOsc);
+            ambientOscillators.push(flowLFO);
+            
+            // Bubble-like high tones
+            const bubbleOsc = audioContext.createOscillator();
+            bubbleOsc.type = 'sine';
+            bubbleOsc.frequency.value = 600;
+            const bubbleGain = audioContext.createGain();
+            bubbleGain.gain.value = 0.02;
+            
+            // Bubble LFO
+            const bubbleLFO = audioContext.createOscillator();
+            bubbleLFO.type = 'sine';
+            bubbleLFO.frequency.value = 0.8;
+            const bubbleLFOGain = audioContext.createGain();
+            bubbleLFOGain.gain.value = 0.015;
+            bubbleLFO.connect(bubbleLFOGain);
+            bubbleLFOGain.connect(bubbleGain.gain);
+            bubbleLFO.start();
+            
+            bubbleOsc.connect(bubbleGain);
+            bubbleGain.connect(ambientGain);
+            bubbleOsc.start();
+            ambientOscillators.push(bubbleOsc);
+            ambientOscillators.push(bubbleLFO);
+        }
+        
+        // Start on first interaction
+        document.addEventListener('click', () => {
+            if (!isMusicPlaying && !state.audioMuted) startAmbientMusic();
+        }, { once: true });
+        
+        function playSound(soundType) {
+            if (state.audioMuted) return;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            switch(soundType) {
+                case 'footstep':
+                    createFootstepSound();
+                    break;
+                case 'portal':
+                    createPortalSound();
+                    break;
+            }
+        }
+        
+        function toggleMute() {
+            state.audioMuted = !state.audioMuted;
+            document.getElementById('mute-btn').textContent = state.audioMuted ? '🔇' : '🔊';
+        }
+        
+        function returnToLobby() {
+            inventory.save();
+            window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
+        }
+        
+        // Particle burst effect
+        function createParticleBurst(position) {
+            const burstCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(burstCount * 3);
+            const velocities = [];
+            
+            for (let i = 0; i < burstCount; i++) {
+                positions[i * 3] = position.x;
+                positions[i * 3 + 1] = position.y;
+                positions[i * 3 + 2] = position.z;
+                
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: (Math.random() - 0.5) * 0.5,
+                    z: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00aaff,
+                size: 0.1,
+                transparent: true,
+                opacity: 1
+            });
+            
+            const burst = new THREE.Points(geometry, material);
+            scene.add(burst);
+            
+            state.particles.push({
+                mesh: burst,
+                velocities,
+                life: 60
+            });
+        }
+        
+        // ============================================
+        // THREE.JS SCENE
+        // ============================================
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x001133);
+        scene.fog = new THREE.FogExp2(0x001133, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 8);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Underwater lighting
+        const ambientLight = new THREE.AmbientLight(0x004488, 0.4);
+        scene.add(ambientLight);
+        
+        const sunLight = new THREE.DirectionalLight(0x88ccff, 0.6);
+        sunLight.position.set(10, 50, 10);
+        scene.add(sunLight);
+        
+        // Caustics effect light
+        const causticLight = new THREE.PointLight(0x00aaff, 1, 30);
+        causticLight.position.set(0, 10, 0);
+        scene.add(causticLight);
+        
+        // ============================================
+        // OCEAN FLOOR
+        // ============================================
+        
+        const floorGeometry = new THREE.PlaneGeometry(100, 100, 50, 50);
+        
+        // Create sandy terrain
+        const positions = floorGeometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            const height = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 1.5 +
+                          Math.sin(x * 0.1 + y * 0.1) * 0.5;
+            positions.setZ(i, height);
+        }
+        floorGeometry.computeVertexNormals();
+        
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0xc4a35a,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -5;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        // ============================================
+        // CORAL REEFS
+        // ============================================
+        
+        const coralColors = [0xff6b6b, 0xff9f40, 0xffd93d, 0x6bcf7f, 0x4ecdc4];
+        
+        for (let i = 0; i < 40; i++) {
+            const coralGroup = new THREE.Group();
+            const x = (Math.random() - 0.5) * 60;
+            const z = (Math.random() - 0.5) * 60;
+            coralGroup.position.set(x, -5, z);
+            
+            const color = coralColors[Math.floor(Math.random() * coralColors.length)];
+            
+            // Create branching coral
+            const branches = 3 + Math.floor(Math.random() * 4);
+            for (let j = 0; j < branches; j++) {
+                const height = 1 + Math.random() * 2;
+                const branchGeo = new THREE.CylinderGeometry(0.05, 0.15, height, 6);
+                const branchMat = new THREE.MeshStandardMaterial({ color: color });
+                const branch = new THREE.Mesh(branchGeo, branchMat);
+                branch.position.y = height / 2;
+                branch.rotation.x = (Math.random() - 0.5) * 0.5;
+                branch.rotation.z = (Math.random() - 0.5) * 0.5;
+                branch.rotation.y = (j / branches) * Math.PI * 2;
+                coralGroup.add(branch);
+            }
+            
+            scene.add(coralGroup);
+        }
+        
+        // ============================================
+        // SEAWEED
+        // ============================================
+        
+        for (let i = 0; i < 30; i++) {
+            const seaweedGroup = new THREE.Group();
+            const x = (Math.random() - 0.5) * 70;
+            const z = (Math.random() - 0.5) * 70;
+            seaweedGroup.position.set(x, -5, z);
+            
+            const segments = 5 + Math.floor(Math.random() * 5);
+            const height = 2 + Math.random() * 3;
+            
+            for (let j = 0; j < segments; j++) {
+                const segGeo = new THREE.CylinderGeometry(0.03, 0.08, height / segments, 5);
+                const segMat = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+                const seg = new THREE.Mesh(segGeo, segMat);
+                seg.position.y = (j * height / segments) + (height / segments / 2);
+                seg.userData = { 
+                    baseRotation: (Math.random() - 0.5) * 0.3,
+                    phase: Math.random() * Math.PI * 2
+                };
+                seaweedGroup.add(seg);
+            }
+            
+            scene.add(seaweedGroup);
+            state.fish.push(seaweedGroup); // Reuse fish array for animation
+        }
+        
+        // ============================================
+        // BUBBLES
+        // ============================================
+        
+        function createBubbles() {
+            const bubbleCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(bubbleCount * 3);
+            const speeds = [];
+            
+            for (let i = 0; i < bubbleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 50;
+                positions[i * 3 + 1] = -5 + Math.random() * 15;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+                speeds.push(0.02 + Math.random() * 0.03);
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const bubbles = new THREE.Points(geometry, material);
+            scene.add(bubbles);
+            
+            return { mesh: bubbles, speeds };
+        }
+        
+        const bubblesData = createBubbles();
+        
+        // ============================================
+        // RETURN PORTAL
+        // ============================================
+        
+        const portalGroup = new THREE.Group();
+        portalGroup.position.set(0, 0, -8);
+        scene.add(portalGroup);
+        
+        // Portal ring (aqua/cyan for water)
+        const torusGeometry = new THREE.TorusGeometry(2, 0.3, 16, 100);
+        const torusMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00aaff,
+            emissive: 0x0088cc,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.9
+        });
+        const portalRing = new THREE.Mesh(torusGeometry, torusMaterial);
+        portalGroup.add(portalRing);
+        
+        // Portal inner
+        const portalInnerGeometry = new THREE.CircleGeometry(1.8, 32);
+        const portalInnerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00aaff,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+        const portalInner = new THREE.Mesh(portalInnerGeometry, portalInnerMaterial);
+        portalGroup.add(portalInner);
+        
+        // Portal glow
+        const portalGlow = new THREE.PointLight(0x00aaff, 2, 20);
+        portalGlow.position.set(0, 0, 0);
+        portalGroup.add(portalGlow);
+        
+        // Portal label
+        function createTextSprite(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            ctx.fillStyle = 'rgba(0, 20, 40, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.font = 'bold 48px Arial';
+            ctx.fillStyle = '#00aaff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(4, 1, 1);
+            return sprite;
+        }
+        
+        const portalLabel = createTextSprite('→ Lobby World');
+        portalLabel.position.set(0, 3.5, 0);
+        portalGroup.add(portalLabel);
+        
+        // Portal particles
+        function createPortalParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.5 + Math.random() * 0.5;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 3;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0x00aaff,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particles = new THREE.Points(geometry, material);
+            portalGroup.add(particles);
+            return particles;
+        }
+        
+        const portalParticles = createPortalParticles();
+        
+        // ============================================
+        // AGENT (Player)
+        // ============================================
+        
+        const agentGroup = new THREE.Group();
+        agentGroup.position.set(0, 0, 8);
+        scene.add(agentGroup);
+        
+        // Spawn world items
+        spawnWorldItems(scene);
+        
+        // Body (cylinder)
+        const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff3333,
+            roughness: 0.3,
+            metalness: 0.7
+        });
+        const agentBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        agentBody.position.y = 0.5;
+        agentBody.castShadow = true;
+        agentGroup.add(agentBody);
+        
+        // Top cap
+        const topCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            bodyMaterial
+        );
+        topCap.position.y = 1.0;
+        agentGroup.add(topCap);
+        
+        // Bottom cap
+        const bottomCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            bodyMaterial
+        );
+        bottomCap.position.y = 0.0;
+        agentGroup.add(bottomCap);
+        
+        // Agent glow
+        const agentGlow = new THREE.PointLight(0xff3333, 0.5, 3);
+        agentGlow.position.y = 0.5;
+        agentGroup.add(agentGlow);
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        const keys = {};
+        // SLOW movement underwater
+        const agentSpeed = 0.06; // Increased from 0.04
+        const agentVelocity = new THREE.Vector3();
+        let verticalVelocity = 0;
+        const swimSpeed = 0.12; // Doubled from 0.06 for better swimming
+        const waterGravity = -0.005; // Reduced from -0.008
+        let lastFootstepTime = 0;
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space') {
+                verticalVelocity = swimSpeed;
+            }
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                verticalVelocity = -swimSpeed;
+            }
+            if (e.code === 'KeyI') {
+                inventory.toggle();
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Mouse look
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.3;
+        
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - previousMouseX;
+            const deltaY = e.clientY - previousMouseY;
+            
+            cameraAngleX -= deltaX * 0.005;
+            cameraAngleY += deltaY * 0.005;
+            
+            cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
+            
+            previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
+        });
+        
+        function updateAgentMovement() {
+            const forward = new THREE.Vector3(0, 0, -1);
+            const right = new THREE.Vector3(1, 0, 0);
+            
+            forward.applyQuaternion(camera.quaternion);
+            right.applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            agentVelocity.set(0, 0, 0);
+            
+            if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
+            if (keys['KeyS']) agentVelocity.add(forward.multiplyScalar(-agentSpeed));
+            if (keys['KeyA']) agentVelocity.add(right.multiplyScalar(-agentSpeed));
+            if (keys['KeyD']) agentVelocity.add(right.multiplyScalar(agentSpeed));
+            
+            // Play footstep sound when moving
+            const isMoving = agentVelocity.length() > 0;
+            if (isMoving) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 600) {
+                    playSound('footstep');
+                    lastFootstepTime = now;
+                }
+            }
+            
+            agentGroup.position.x += agentVelocity.x;
+            agentGroup.position.z += agentVelocity.z;
+            
+            // Underwater physics - gentle float with gravity
+            verticalVelocity += waterGravity; // Small gravity pulls down
+            agentGroup.position.y += verticalVelocity;
+            verticalVelocity *= 0.92; // Water drag
+            
+            // Bounds
+            if (agentGroup.position.y > 8) {
+                agentGroup.position.y = 8;
+                verticalVelocity = 0;
+            }
+            if (agentGroup.position.y < -4) {
+                agentGroup.position.y = -4;
+                verticalVelocity = 0;
+            }
+            
+            // Camera follow
+            camera.position.x = agentGroup.position.x + Math.sin(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
+            camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
+            camera.lookAt(agentGroup.position);
+            
+            // Portal collision
+            const distance = agentGroup.position.distanceTo(portalGroup.position);
+            if (distance < 2.5 && !state.transitioning) {
+                state.transitioning = true;
+                
+                // Play portal sound
+                playSound('portal');
+                
+                // Trigger transition
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                overlay.classList.add('active');
+                text.classList.add('active');
+                createParticleBurst(agentGroup.position);
+                
+                setTimeout(() => {
+                    inventory.save();
+                    window.location.href = 'lobby.html?inventory=' + encodeURIComponent(inventory.toJSON());
+                }, 2000);
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        let frame = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            frame++;
+            
+            // Rotate portal
+            portalRing.rotation.z -= 0.01;
+            portalInner.rotation.z += 0.005;
+            
+            // Animate portal particles
+            const portalPos = portalParticles.geometry.attributes.position.array;
+            for (let i = 0; i < 50; i++) {
+                portalPos[i * 3 + 1] += 0.02;
+                if (portalPos[i * 3 + 1] > 1.5) {
+                    portalPos[i * 3 + 1] = -1.5;
+                }
+            }
+            portalParticles.geometry.attributes.position.needsUpdate = true;
+            portalParticles.rotation.y += 0.002;
+            
+            // Animate bubbles rising
+            const bubblePositions = bubblesData.mesh.geometry.attributes.position.array;
+            for (let i = 0; i < 100; i++) {
+                bubblePositions[i * 3 + 1] += bubblesData.speeds[i];
+                if (bubblePositions[i * 3 + 1] > 10) {
+                    bubblePositions[i * 3 + 1] = -5;
+                }
+            }
+            bubblesData.mesh.geometry.attributes.position.needsUpdate = true;
+            
+            // Animate seaweed swaying
+            state.fish.forEach((seaweed) => {
+                seaweed.children.forEach((seg, i) => {
+                    seg.rotation.z = seg.userData.baseRotation + 
+                        Math.sin(frame * 0.02 + seg.userData.phase + i * 0.5) * 0.2;
+                });
+            });
+            
+            // Update burst particles
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.life--;
+                
+                const pos = p.mesh.geometry.attributes.position.array;
+                for (let j = 0; j < p.velocities.length; j++) {
+                    pos[j * 3] += p.velocities[j].x;
+                    pos[j * 3 + 1] += p.velocities[j].y;
+                    pos[j * 3 + 2] += p.velocities[j].z;
+                    p.velocities[j].y -= 0.005;
+                }
+                p.mesh.geometry.attributes.position.needsUpdate = true;
+                p.mesh.material.opacity = p.life / 60;
+                
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    state.particles.splice(i, 1);
+                }
+            }
+            
+            updateAgentMovement();
+            
+            // Check item collection
+            if (agentGroup) {
+                checkItemCollection(agentGroup.position);
+            }
+            
+            // Animate items
+            itemMeshes.forEach(mesh => {
+                mesh.rotation.y += 0.02;
+                mesh.position.y = 1.5 + Math.sin(Date.now() * 0.002 + mesh.position.x) * 0.2;
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        // Fade out overlay
+        setTimeout(() => {
+            document.getElementById('arrival-overlay').classList.add('fade-out');
+            document.getElementById('arrival-text').classList.add('fade-out');
+        }, 500);
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        animate();
+    </script>
+</body>
+</html>

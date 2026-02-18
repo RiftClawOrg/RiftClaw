@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "riftclaw",
+  "version": "${version}",
+  "name": "RiftClaw",
+  "description": "Cross-server portal crossings between Minecraft and RiftClaw browser worlds",
+  "authors": [
+    "RiftClaw Team"
+  ],
+  "contact": {
+    "homepage": "https://riftclaw.com",
+    "sources": "https://github.com/RiftClawOrg/RiftClaw"
+  },
+  "license": "MIT",
+  "icon": "assets/riftclaw/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.riftclaw.RiftClawClient"
+    ],
+    "main": [
+      "com.riftclaw.RiftClawMod"
+    ]
+  },
+  "mixins": [
+    "riftclaw.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.14.22",
+    "fabric-api": "*",
+    "minecraft": "~1.20.1",
+    "java": ">=17"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
