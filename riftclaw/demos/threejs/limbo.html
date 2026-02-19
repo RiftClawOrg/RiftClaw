@@ -824,22 +824,16 @@
             
             if (targetUrl) {
                 setTimeout(() => {
-                    // Open in new tab
+                    // Open in new tab - DON'T close source so it stays registered
                     const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
                     
                     if (newWindow) {
-                        // Try to close this tab (may fail for user-opened windows)
+                        // Show travel complete screen but DON'T close
+                        // This keeps the world registered with the relay
                         setTimeout(() => {
-                            window.close();
-                            // If we're still here after 100ms, close() was blocked
-                            setTimeout(() => {
-                                if (!window.closed) {
-                                    // Hide the old overlay before showing travel complete
-                                    overlay.classList.remove('active');
-                                    text.classList.remove('active');
-                                    showTravelCompleteScreen();
-                                }
-                            }, 100);
+                            overlay.classList.remove('active');
+                            text.classList.remove('active');
+                            showTravelCompleteScreen();
                         }, 500);
                     } else {
                         // Fallback if popup blocked

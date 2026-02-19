@@ -1574,18 +1574,19 @@
                 passport
             });
             
-            // Open in new tab and close current after delay
+            // Open in new tab - DON'T close source on return trips
+            // This keeps the relay connection alive so the destination can find us
             setTimeout(() => {
                 const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
-                if (newWindow) {
-                    // Close this tab after a brief delay to ensure new tab opens
-                    setTimeout(() => {
-                        window.close();
-                    }, 500);
-                } else {
+                if (!newWindow) {
                     // Fallback if popup blocked
                     window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
                 }
+                // Note: We intentionally DON'T close this tab
+                // so the world stays registered with the relay
+                state.handoffPending = false;
+                overlay.classList.remove('active');
+                text.classList.remove('active');
             }, 2000);
         }
         
