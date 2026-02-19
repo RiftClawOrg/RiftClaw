@@ -1507,16 +1507,22 @@
                         // Browser blocked file:// URL - show helpful instructions
                         text.innerHTML = `
                             <div>⚠️ BROWSER SECURITY BLOCK</div>
-                            <div style="font-size:0.9rem;color:#ff6666;margin-top:10px;max-width:400px;">
+                            <div style="font-size:0.85rem;color:#ff6666;margin-top:10px;max-width:450px;line-height:1.5;">
                                 Cannot open local files from remote websites.<br><br>
-                                <strong>Quick Fix:</strong><br>
-                                1. Open terminal in limbo.html folder<br>
-                                2. Run: <code style="background:#333;padding:2px 6px;border-radius:3px;">python3 -m http.server 8000</code><br>
-                                3. Open: <code style="background:#333;padding:2px 6px;border-radius:3px;">http://localhost:8000/limbo.html</code><br><br>
-                                <span style="font-size:0.8rem;color:#888;">Then return will work!</span>
+                                <strong>Pick your OS:</strong><br><br>
+                                <span style="color:#00d5ff;">🪟 Windows (no Python):</span><br>
+                                1. Install VS Code: code.visualstudio.com<br>
+                                2. Install "Live Server" extension<br>
+                                3. Right-click limbo.html → "Open with Live Server"<br><br>
+                                <span style="color:#00d5ff;">🪟 Windows (with PowerShell):</span><br>
+                                Run: <code style="background:#333;padding:2px 6px;border-radius:3px;font-size:0.75rem;">npx serve</code> in limbo folder<br>
+                                Then: <code style="background:#333;padding:2px 6px;border-radius:3px;font-size:0.75rem;">http://localhost:3000/limbo.html</code><br><br>
+                                <span style="color:#00d5ff;">🐧 Mac/Linux:</span><br>
+                                Run: <code style="background:#333;padding:2px 6px;border-radius:3px;font-size:0.75rem;">python3 -m http.server 8000</code><br>
+                                Then: <code style="background:#333;padding:2px 6px;border-radius:3px;font-size:0.75rem;">http://localhost:8000/limbo.html</code>
                             </div>
                         `;
-                        log('Browser blocked file:// - use http://localhost:8000 instead', 'error');
+                        log('Browser blocked file:// - see on-screen instructions', 'error');
                         state.handoffPending = false;
                         setTimeout(() => {
                             overlay.classList.remove('active');
