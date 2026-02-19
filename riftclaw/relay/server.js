@@ -181,19 +181,6 @@ const handlers = {
       }
     });
 
-    // Add echo test portal if no worlds available
-    if (portals.length === 0) {
-      portals.push({
-        portal_id: "portal_echo_test",
-        name: "Echo Test Portal",
-        destination_world: "echo_test",
-        destination_url: "wss://echo.websocket.org",
-        position: { x: 0, y: 0, z: 0 },
-        requires_auth: false,
-        metadata: { note: "Test server for development" }
-      });
-    }
-
     ws.send(createMessage('discover_response', { 
       portals,
       registered_worlds: worlds.size
@@ -236,20 +223,6 @@ const handlers = {
       } catch (e) {
         console.error(`[Handoff] Error forwarding to ${targetWorld}:`, e.message);
       }
-    }
-
-    // Check if this is the echo test portal
-    if (portal_id === 'portal_echo_test') {
-      console.log(`[Handoff] Routing to echo test server`);
-      
-      setTimeout(() => {
-        ws.send(createMessage('handoff_confirm', {
-          passport: passport,
-          target_url: 'wss://echo.websocket.org'
-        }));
-      }, 500);
-      
-      return;
     }
 
     // Unknown destination

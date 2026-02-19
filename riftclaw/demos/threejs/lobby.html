@@ -1479,10 +1479,42 @@
         
         function openReturnPortal(targetWorld, targetUrl) {
             if (state.handoffPending) return;
-            
+
+            // Check if target is a local file:// URL
+            if (targetUrl.startsWith('file://')) {
+                log(`Returning to local file: ${targetWorld}`);
+                // For file:// URLs, skip relay handoff and open directly
+                const overlay = document.getElementById('transition-overlay');
+                const text = document.getElementById('transition-text');
+                text.innerHTML = `
+                    <div>🌀 RETURNING</div>
+                    <div style="font-size:1rem;color:#888;margin-top:10px">To ${targetWorld}</div>
+                    <div style="font-size:0.8rem;color:#666;margin-top:5px">(Local File)</div>
+                `;
+                overlay.classList.add('active');
+                text.classList.add('active');
+
+                // Play portal sound
+                playSound('portal');
+
+                setTimeout(() => {
+                    // Try to open local file in new tab
+                    const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
+                    if (newWindow) {
+                        setTimeout(() => window.close(), 500);
+                    } else {
+                        log('Could not open local file - browser blocked it', 'error');
+                        state.handoffPending = false;
+                        overlay.classList.remove('active');
+                        text.classList.remove('active');
+                    }
+                }, 2000);
+                return;
+            }
+
             log(`Opening return portal to ${targetWorld}...`);
             state.handoffPending = true;
-            
+
             const overlay = document.getElementById('transition-overlay');
             const text = document.getElementById('transition-text');
             text.innerHTML = `
@@ -1491,7 +1523,7 @@
             `;
             overlay.classList.add('active');
             text.classList.add('active');
-            
+
             // Send handoff back
             const passport = {
                 agent_id: state.agentId,
@@ -1508,7 +1540,7 @@
                 timestamp: Date.now() / 1000,
                 nonce: Math.random().toString(36).substr(2, 9)
             };
-            
+
             sendMessage('handoff_request', {
                 portal_id: 'return-portal',
                 passport
