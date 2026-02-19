@@ -1504,10 +1504,24 @@
                     if (newWindow) {
                         setTimeout(() => window.close(), 500);
                     } else {
-                        log('Could not open local file - browser blocked it', 'error');
+                        // Browser blocked file:// URL - show helpful instructions
+                        text.innerHTML = `
+                            <div>⚠️ BROWSER SECURITY BLOCK</div>
+                            <div style="font-size:0.9rem;color:#ff6666;margin-top:10px;max-width:400px;">
+                                Cannot open local files from remote websites.<br><br>
+                                <strong>Quick Fix:</strong><br>
+                                1. Open terminal in limbo.html folder<br>
+                                2. Run: <code style="background:#333;padding:2px 6px;border-radius:3px;">python3 -m http.server 8000</code><br>
+                                3. Open: <code style="background:#333;padding:2px 6px;border-radius:3px;">http://localhost:8000/limbo.html</code><br><br>
+                                <span style="font-size:0.8rem;color:#888;">Then return will work!</span>
+                            </div>
+                        `;
+                        log('Browser blocked file:// - use http://localhost:8000 instead', 'error');
                         state.handoffPending = false;
-                        overlay.classList.remove('active');
-                        text.classList.remove('active');
+                        setTimeout(() => {
+                            overlay.classList.remove('active');
+                            text.classList.remove('active');
+                        }, 8000);
                     }
                 }, 2000);
                 return;
