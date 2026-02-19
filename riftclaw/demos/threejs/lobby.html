@@ -1111,7 +1111,8 @@
             agentName: 'RiftWalker_ThreeJS',
             inPortal: false,
             handoffPending: false,
-            particles: []
+            particles: [],
+            pingInterval: null
         };
         
         // UI Helpers
@@ -1287,9 +1288,17 @@
                     world_url: window.location.href,
                     display_name: 'Replit Lobby'
                 });
-                
+
                 // Send discover after connection
                 setTimeout(sendDiscover, 500);
+
+                // Keep-alive ping every 30 seconds to prevent Replit idle timeout
+                if (state.pingInterval) clearInterval(state.pingInterval);
+                state.pingInterval = setInterval(() => {
+                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                        sendMessage('ping');
+                    }
+                }, 30000);
             };
             
             state.ws.onmessage = (event) => {
@@ -1305,6 +1314,10 @@
                 log('Disconnected from relay', 'error');
                 setStatus('Disconnected', 'disconnected');
                 state.connected = false;
+                if (state.pingInterval) {
+                    clearInterval(state.pingInterval);
+                    state.pingInterval = null;
+                }
             };
             
             state.ws.onerror = (err) => {
@@ -1365,6 +1378,10 @@
                     
                 case 'error':
                     log(`Error: ${msg.message}`, 'error');
+                    break;
+
+                case 'pong':
+                    // Keep-alive response, no action needed
                     break;
             }
         }

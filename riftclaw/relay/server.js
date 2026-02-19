@@ -259,6 +259,21 @@ const handlers = {
     }));
   },
 
+  // Target world acknowledging handoff
+  handoff_confirm(ws, message) {
+    // Target world is confirming receipt of handoff_request
+    // The relay already sent its own confirm after forwarding, so we just log this
+    const conn = connections.get(ws);
+    const worldName = conn?.worldName || 'unknown';
+    console.log(`[Handoff] ${worldName} acknowledged handoff (tracking not implemented)`);
+    // Don't broadcast this - the relay already handled the confirm
+  },
+
+  // Keep-alive ping from worlds to prevent idle timeout
+  ping(ws, message) {
+    ws.send(createMessage('pong', { timestamp: getTimestamp() }));
+  },
+
   // Default handler for unknown types
   default(ws, message) {
     console.log(`[Unknown] Message type: ${message.type}`);
