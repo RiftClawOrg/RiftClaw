@@ -49,6 +49,20 @@
         #status.connected { color: #0f0; }
         #status.connecting { color: #ff0; }
         #status.disconnected { color: #f00; }
+
+        #reconnect-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: rgba(170, 102, 255, 0.3);
+            border: 1px solid #aa66ff;
+            color: #aa66ff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: none;
+        }
+        #reconnect-btn:hover { background: rgba(170, 102, 255, 0.5); }
+        #reconnect-btn.show { display: block; }
         
         #log {
             margin-top: 10px;
@@ -199,6 +213,7 @@
     <div id="ui">
         <h1>🏛️ Limbo - Local Lobby</h1>
         <div id="status" class="status disconnected">Disconnected</div>
+        <button id="reconnect-btn" onclick="forceReconnect()">🔄 Reconnect to Relay</button>
         <div id="log"></div>
     </div>
     
@@ -352,6 +367,23 @@
             const statusEl = document.getElementById('status');
             statusEl.textContent = text;
             statusEl.className = `status ${className}`;
+
+            // Show/hide reconnect button based on status
+            const reconnectBtn = document.getElementById('reconnect-btn');
+            if (className === 'disconnected' && reconnectBtn) {
+                reconnectBtn.classList.add('show');
+            } else if (reconnectBtn) {
+                reconnectBtn.classList.remove('show');
+            }
+        }
+
+        function forceReconnect() {
+            log('Manual reconnect...');
+            if (state.ws) {
+                state.ws.close();
+            }
+            state.connected = false;
+            setTimeout(connectToRelay, 500);
         }
 
         // ============================================
@@ -450,12 +482,18 @@
         // ============================================
         
         function connectToRelay() {
+            // Don't try to connect if already connecting or connected
+            if (state.ws && (state.ws.readyState === WebSocket.CONNECTING || state.ws.readyState === WebSocket.OPEN)) {
+                log('Already connected or connecting, skipping...');
+                return;
+            }
+
             log(`Connecting to relay at ${RELAY_URL}...`);
             setStatus('Connecting...', 'connecting');
-            
+
             try {
                 state.ws = new WebSocket(RELAY_URL);
-                
+
                 state.ws.onopen = () => {
                     log('Connected to relay!', 'received');
                     setStatus('Connected', 'connected');
@@ -1121,11 +1159,26 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Start
-        connectToRelay();
+        // Start with a small delay to ensure everything is loaded
+        setTimeout(() => {
+            connectToRelay();
+        }, 100);
+
         animate();
-        
+
         log('Limbo initialized. Waiting for relay connection...');
+
+        // Add manual reconnect on 'R' key
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyR' && e.ctrlKey) {
+                e.preventDefault();
+                log('Manual reconnect requested...');
+                if (state.ws) {
+                    state.ws.close();
+                }
+                setTimeout(connectToRelay, 500);
+            }
+        });
     </script>
 </body>
 </html>
