@@ -350,7 +350,98 @@
             statusEl.textContent = text;
             statusEl.className = `status ${className}`;
         }
-        
+
+        // ============================================
+        // AUDIO SYSTEM
+        // ============================================
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let isAudioStarted = false;
+
+        function startAudio() {
+            if (isAudioStarted) return;
+            isAudioStarted = true;
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        document.addEventListener('click', startAudio, { once: true });
+        document.addEventListener('keydown', startAudio, { once: true });
+
+        function createPortalSound() {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioContext.destination);
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(200, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.3);
+            osc.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.6);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(800, audioContext.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(2000, audioContext.currentTime + 0.3);
+
+            gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.6);
+
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.6);
+        }
+
+        function createFootstepSound() {
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(100, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+
+            gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+            osc.start(audioContext.currentTime);
+            osc.stop(audioContext.currentTime + 0.1);
+        }
+
+        function createAmbientDrone() {
+            const osc1 = audioContext.createOscillator();
+            const osc2 = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioContext.destination);
+
+            osc1.type = 'sine';
+            osc1.frequency.value = 55;
+
+            osc2.type = 'triangle';
+            osc2.frequency.value = 57;
+
+            gain.gain.value = 0.03;
+
+            osc1.start();
+            osc2.start();
+
+            return { osc1, osc2, gain };
+        }
+
+        let ambientSound = null;
+        function playAmbient() {
+            if (!ambientSound) {
+                ambientSound = createAmbientDrone();
+            }
+        }
+
         // ============================================
         // WEBSOCKET - RIFTCLAW PROTOCOL
         // ============================================
@@ -503,32 +594,86 @@
             const group = new THREE.Group();
             group.position.set(x, 1.5, z);
             
-            // Portal ring
+            // Color based on destination world
+            const worldColors = {
+                'lobby': 0x00d5ff,
+                'arena': 0xff3333,
+                'cyb3r': 0xff00ff,
+                'forest': 0x4ade80,
+                'space': 0x0088ff,
+                'moon': 0xcccccc,
+                'water': 0x00aaff,
+                'limbo': 0xaa66ff
+            };
+            const portalColor = worldColors[portalData.destination_world] || 0x00d5ff;
+            
+            // Portal ring with better material
             const ringGeo = new THREE.TorusGeometry(1.5, 0.2, 16, 100);
             const ringMat = new THREE.MeshStandardMaterial({
-                color: 0x666666,
-                emissive: 0x444444,
-                emissiveIntensity: 0.5,
+                color: portalColor,
+                emissive: portalColor,
+                emissiveIntensity: 0.8,
                 transparent: true,
-                opacity: 0.9
+                opacity: 0.9,
+                metalness: 0.5,
+                roughness: 0.2
             });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             group.add(ring);
             
+            // Outer glow ring
+            const glowGeo = new THREE.TorusGeometry(1.8, 0.1, 16, 100);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: portalColor,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            group.add(glow);
+            
             // Inner glow
             const innerGeo = new THREE.CircleGeometry(1.3, 32);
             const innerMat = new THREE.MeshBasicMaterial({
-                color: 0x888888,
+                color: portalColor,
                 transparent: true,
-                opacity: 0.3,
+                opacity: 0.4,
                 side: THREE.DoubleSide
             });
             const inner = new THREE.Mesh(innerGeo, innerMat);
             group.add(inner);
             
+            // Particle system
+            const particleCount = 50;
+            const particlesGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1.3 + Math.random() * 0.4;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 2.5;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+            }
+            
+            particlesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const particlesMat = new THREE.PointsMaterial({
+                color: portalColor,
+                size: 0.08,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            const particles = new THREE.Points(particlesGeo, particlesMat);
+            group.add(particles);
+            
+            // Point light for glow
+            const light = new THREE.PointLight(portalColor, 2, 15);
+            light.position.set(0, 0, 0);
+            group.add(light);
+            
             // Label
             const label = createTextSprite(portalData.name);
-            label.position.set(0, 2.5, 0);
+            label.position.set(0, 2.8, 0);
             group.add(label);
             
             scene.add(group);
@@ -537,7 +682,10 @@
                 mesh: group,
                 data: portalData,
                 ring: ring,
-                inner: inner
+                inner: inner,
+                glow: glow,
+                particles: particles,
+                light: light
             });
         }
         
@@ -606,13 +754,21 @@
             
             if (targetUrl) {
                 setTimeout(() => {
-                    // Open in new tab or redirect
-                    window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
+                    // Open in new tab
+                    const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
                     
-                    // Reset
-                    state.handoffPending = false;
-                    overlay.classList.remove('active');
-                    text.classList.remove('active');
+                    if (newWindow) {
+                        // Close this tab after a brief delay
+                        setTimeout(() => {
+                            window.close();
+                        }, 500);
+                    } else {
+                        // Fallback if popup blocked
+                        window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
+                        state.handoffPending = false;
+                        overlay.classList.remove('active');
+                        text.classList.remove('active');
+                    }
                 }, 2000);
             } else {
                 log('No target URL provided!', 'error');
@@ -690,6 +846,7 @@
         const gravity = -0.02;
         const jumpStrength = 0.4;
         let isGrounded = true;
+        let lastFootstepTime = 0;
         
         document.addEventListener('keydown', (e) => {
             keys[e.code] = true;
@@ -776,6 +933,16 @@
             camera.position.z = agentGroup.position.z + Math.cos(cameraAngleX) * Math.cos(cameraAngleY) * 8;
             camera.position.y = agentGroup.position.y + Math.sin(cameraAngleY) * 8;
             camera.lookAt(agentGroup.position);
+
+            // Footstep sounds
+            const isMoving = agentVelocity.length() > 0 && isGrounded;
+            if (isMoving) {
+                const now = Date.now();
+                if (now - lastFootstepTime > 400) {
+                    createFootstepSound();
+                    lastFootstepTime = now;
+                }
+            }
         }
         
         // ============================================
@@ -792,6 +959,7 @@
                 if (distance < 2.0 && !state.inPortal && !state.handoffPending) {
                     state.inPortal = true;
                     log(`Entering portal: ${portal.data.name}`);
+                    createPortalSound();
                     sendHandoffRequest(portal.data);
                 } else if (distance >= 2.5) {
                     state.inPortal = false;
@@ -806,11 +974,40 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            // Animate portals
+            const time = Date.now() * 0.001;
+            
+            // Animate portals with enhanced effects
             state.portalMeshes.forEach((portal, i) => {
-                portal.ring.rotation.z += 0.01 * (i % 2 === 0 ? 1 : -1);
-                portal.inner.rotation.z -= 0.005;
-                portal.mesh.position.y = 1.5 + Math.sin(Date.now() * 0.001 + i) * 0.1;
+                // Ring rotation
+                portal.ring.rotation.z += 0.015 * (i % 2 === 0 ? 1 : -1);
+                portal.inner.rotation.z -= 0.008;
+                
+                // Glow ring counter-rotation
+                if (portal.glow) {
+                    portal.glow.rotation.z -= 0.01 * (i % 2 === 0 ? 1 : -1);
+                    portal.glow.material.opacity = 0.2 + Math.sin(time * 2 + i) * 0.1;
+                }
+                
+                // Bobbing motion
+                portal.mesh.position.y = 1.5 + Math.sin(time + i) * 0.15;
+                
+                // Animate particles
+                if (portal.particles) {
+                    const positions = portal.particles.geometry.attributes.position.array;
+                    for (let j = 0; j < 50; j++) {
+                        positions[j * 3 + 1] += 0.02;
+                        if (positions[j * 3 + 1] > 1.25) {
+                            positions[j * 3 + 1] = -1.25;
+                        }
+                    }
+                    portal.particles.geometry.attributes.position.needsUpdate = true;
+                    portal.particles.rotation.y += 0.002;
+                }
+                
+                // Pulse light intensity
+                if (portal.light) {
+                    portal.light.intensity = 1.5 + Math.sin(time * 3 + i) * 0.5;
+                }
             });
             
             updateAgentMovement();

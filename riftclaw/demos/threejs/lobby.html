@@ -202,9 +202,172 @@
             font-size: 1rem;
             text-align: center;
         }
+
+        /* Return Menu */
+        #return-menu {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00d5ff;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid #00d5ff;
+            width: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 0 40px rgba(0, 213, 255, 0.4);
+        }
+
+        #return-menu h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.3rem;
+            text-align: center;
+            color: #00d5ff;
+            text-shadow: 0 0 10px #00d5ff;
+        }
+
+        .return-option {
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: rgba(0, 213, 255, 0.1);
+            border: 1px solid rgba(0, 213, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .return-option:hover {
+            background: rgba(0, 213, 255, 0.2);
+            border-color: #00d5ff;
+        }
+
+        .return-option.default {
+            background: rgba(0, 213, 255, 0.25);
+            border-color: #00d5ff;
+            box-shadow: 0 0 15px rgba(0, 213, 255, 0.3);
+        }
+
+        .return-option .icon {
+            font-size: 1.5rem;
+        }
+
+        .return-option .info {
+            flex: 1;
+        }
+
+        .return-option .name {
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .return-option .url {
+            font-size: 0.75rem;
+            color: #888;
+            word-break: break-all;
+        }
+
+        .return-option .badge {
+            font-size: 0.7rem;
+            background: #00d5ff;
+            color: #000;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        #return-menu .add-new {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(0, 213, 255, 0.2);
+        }
+
+        #return-menu input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 213, 255, 0.3);
+            border-radius: 6px;
+            color: #00d5ff;
+            margin: 5px 0;
+            font-size: 0.9rem;
+        }
+
+        #return-menu input::placeholder {
+            color: #666;
+        }
+
+        #return-menu .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #return-menu button {
+            flex: 1;
+            padding: 10px;
+            background: rgba(0, 213, 255, 0.2);
+            border: 1px solid #00d5ff;
+            border-radius: 6px;
+            color: #00d5ff;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        #return-menu button:hover {
+            background: rgba(0, 213, 255, 0.4);
+        }
+
+        #return-menu .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            width: auto;
+            flex: none;
+        }
+
+        #return-menu .close-btn:hover {
+            color: #ff3333;
+        }
+
+        #return-menu .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
+    <!-- Return Menu -->
+    <div id="return-menu">
+        <button class="close-btn" onclick="closeReturnMenu()">&times;</button>
+        <h3>🌀 Return Portal</h3>
+        <div id="return-options"></div>
+        <div class="add-new">
+            <div style="font-size:0.85rem;color:#888;margin-bottom:8px;">Add Custom Destination:</div>
+            <input type="text" id="new-dest-name" placeholder="World name (e.g., My Local World)">
+            <input type="text" id="new-dest-url" placeholder="URL (e.g., http://localhost:8000/limbo.html)">
+            <div class="btn-row">
+                <button onclick="addCustomDestination()">Add Destination</button>
+            </div>
+        </div>
+        <div style="margin-top:15px;padding-top:10px;border-top:1px solid rgba(0,213,255,0.2);font-size:0.8rem;color:#888;text-align:center;">
+            Press 'O' to toggle • Click destination to travel
+        </div>
+    </div>
+
     <div id="inventory-panel" style="display:none;">
         <h3>🎒 Inventory</h3>
         <div style="font-size:0.8rem;color:#888;margin-bottom:10px;text-align:center;">Press 'I' to toggle</div>
@@ -806,6 +969,139 @@
         loadWorldItems();
         storage.load();
         inventory.updateUI();
+
+        // ============================================
+        // RETURN MENU SYSTEM
+        // ============================================
+        
+        const returnMenu = {
+            isOpen: false,
+            
+            toggle() {
+                const menu = document.getElementById('return-menu');
+                if (this.isOpen) {
+                    this.close();
+                } else {
+                    this.open();
+                }
+            },
+            
+            open() {
+                const menu = document.getElementById('return-menu');
+                this.updateOptions();
+                menu.style.display = 'block';
+                this.isOpen = true;
+                log('Return menu opened');
+            },
+            
+            close() {
+                const menu = document.getElementById('return-menu');
+                menu.style.display = 'none';
+                this.isOpen = false;
+            },
+            
+            updateOptions() {
+                const container = document.getElementById('return-options');
+                const options = this.getDestinations();
+                
+                if (options.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div style="font-size:2rem;margin-bottom:10px;">🌀</div>
+                            <div>No return destinations set.</div>
+                            <div style="font-size:0.8rem;margin-top:5px;">Walk through a portal or add one below.</div>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = options.map((opt, idx) => `
+                    <div class="return-option ${opt.isDefault ? 'default' : ''}" onclick="returnMenu.selectDestination(${idx})">
+                        <span class="icon">${opt.icon}</span>
+                        <div class="info">
+                            <div class="name">${opt.name}</div>
+                            <div class="url">${opt.url}</div>
+                        </div>
+                        ${opt.isDefault ? '<span class="badge">DEFAULT</span>' : ''}
+                    </div>
+                `).join('');
+            },
+            
+            getDestinations() {
+                const destinations = [];
+                
+                // Get auto-saved source from localStorage (from when we arrived here)
+                const sourceWorld = localStorage.getItem('riftclaw_source_world');
+                const sourceUrl = localStorage.getItem('riftclaw_source_url');
+                
+                if (sourceWorld && sourceUrl) {
+                    destinations.push({
+                        name: sourceWorld,
+                        url: sourceUrl,
+                        icon: '🏠',
+                        isDefault: true
+                    });
+                }
+                
+                // Get custom destinations
+                const custom = JSON.parse(localStorage.getItem('riftclaw_custom_destinations') || '[]');
+                custom.forEach(dest => {
+                    destinations.push({
+                        name: dest.name,
+                        url: dest.url,
+                        icon: '🌐',
+                        isDefault: false
+                    });
+                });
+                
+                return destinations;
+            },
+            
+            selectDestination(index) {
+                const options = this.getDestinations();
+                if (options[index]) {
+                    const dest = options[index];
+                    this.close();
+                    openReturnPortal(dest.name, dest.url);
+                }
+            },
+            
+            addCustom(name, url) {
+                if (!name || !url) {
+                    log('Name and URL required', 'error');
+                    return false;
+                }
+                
+                const custom = JSON.parse(localStorage.getItem('riftclaw_custom_destinations') || '[]');
+                custom.push({ name, url, added: Date.now() });
+                localStorage.setItem('riftclaw_custom_destinations', JSON.stringify(custom));
+                
+                this.updateOptions();
+                log(`Added destination: ${name}`);
+                return true;
+            }
+        };
+        
+        function toggleReturnMenu() {
+            returnMenu.toggle();
+        }
+        
+        function closeReturnMenu() {
+            returnMenu.close();
+        }
+        
+        function addCustomDestination() {
+            const nameInput = document.getElementById('new-dest-name');
+            const urlInput = document.getElementById('new-dest-url');
+            
+            const name = nameInput.value.trim();
+            const url = urlInput.value.trim();
+            
+            if (returnMenu.addCustom(name, url)) {
+                nameInput.value = '';
+                urlInput.value = '';
+            }
+        }
         
         // Global state
         const state = {
@@ -1201,9 +1497,18 @@
                 passport
             });
             
-            // Redirect after delay
+            // Open in new tab and close current after delay
             setTimeout(() => {
-                window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
+                const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
+                if (newWindow) {
+                    // Close this tab after a brief delay to ensure new tab opens
+                    setTimeout(() => {
+                        window.close();
+                    }, 500);
+                } else {
+                    // Fallback if popup blocked
+                    window.location.href = targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON());
+                }
             }, 2000);
         }
         
@@ -1924,14 +2229,8 @@
                 inventory.toggle();
             }
             if (e.code === 'KeyO') {
-                // Open return portal if we have a source world
-                const sourceWorld = localStorage.getItem('riftclaw_source_world');
-                const sourceUrl = localStorage.getItem('riftclaw_source_url');
-                if (sourceWorld && sourceUrl) {
-                    openReturnPortal(sourceWorld, sourceUrl);
-                } else {
-                    log('No return destination set. Walk through a portal first!', 'error');
-                }
+                // Show return menu
+                toggleReturnMenu();
             }
         });
         
