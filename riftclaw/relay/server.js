@@ -138,11 +138,20 @@ const handlers = {
 
     console.log(`[Discover] Agent ${message.agent_id} discovering portals`);
     
+    // Get the requesting world's name (if it's a world)
+    const requestingWorld = conn.worldName;
+    console.log(`[Discover] Requesting world: ${requestingWorld || 'agent'}`);
+    
     // Build portal list from registered worlds AND config worlds
     const portals = [];
     
-    // Add registered worlds
+    // Add registered worlds (exclude self)
     worlds.forEach((worldData, worldId) => {
+      // Skip if this is the requesting world (don't show portal to self)
+      if (worldId === requestingWorld) {
+        console.log(`[Discover] Skipping self: ${worldId}`);
+        return;
+      }
       if (worldData.ws.readyState === WebSocket.OPEN) {
         portals.push({
           portal_id: `portal_${worldId}_01`,
@@ -158,8 +167,8 @@ const handlers = {
     
     // Add config worlds (for backwards compatibility)
     Object.entries(config.worlds).forEach(([worldId, worldUrl]) => {
-      // Skip if already registered
-      if (!worlds.has(worldId)) {
+      // Skip if already registered or if it's the requesting world
+      if (!worlds.has(worldId) && worldId !== requestingWorld) {
         portals.push({
           portal_id: `portal_${worldId}_01`,
           name: `${worldId} Gateway`,

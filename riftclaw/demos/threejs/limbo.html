@@ -716,6 +716,7 @@
             if (e.target.closest('#ui, #controls, #portals-panel, #inventory-panel')) return;
             isDragging = true;
             previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
         });
         
         document.addEventListener('mouseup', () => isDragging = false);
@@ -723,26 +724,31 @@
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             const deltaX = e.clientX - previousMouseX;
+            const deltaY = e.clientY - previousMouseY;
             cameraAngleX -= deltaX * 0.01;
+            cameraAngleY += deltaY * 0.01;
+            // Clamp vertical angle to prevent flipping
+            cameraAngleY = Math.max(0.1, Math.min(Math.PI / 2 - 0.1, cameraAngleY));
             previousMouseX = e.clientX;
+            previousMouseY = e.clientY;
         });
         
         function updateAgentMovement() {
-            // Movement relative to camera
+            // Movement relative to camera (camera is behind player, so forward is opposite)
             const forward = new THREE.Vector3(
-                Math.sin(cameraAngleX),
+                -Math.sin(cameraAngleX),
                 0,
-                Math.cos(cameraAngleX)
+                -Math.cos(cameraAngleX)
             );
             const right = new THREE.Vector3(
                 Math.sin(cameraAngleX + Math.PI / 2),
                 0,
                 Math.cos(cameraAngleX + Math.PI / 2)
             );
-            
+
             agentVelocity.x = 0;
             agentVelocity.z = 0;
-            
+
             if (keys['KeyW']) agentVelocity.add(forward.multiplyScalar(agentSpeed));
             if (keys['KeyS']) agentVelocity.sub(forward.multiplyScalar(agentSpeed));
             if (keys['KeyA']) agentVelocity.sub(right.multiplyScalar(agentSpeed));
