@@ -334,7 +334,8 @@
             portalMeshes: [],
             inPortal: false,
             handoffPending: false,
-            travelComplete: false
+            travelComplete: false,
+            pingInterval: null
         };
         
         function log(msg, type = 'info') {
@@ -459,16 +460,24 @@
                     log('Connected to relay!', 'received');
                     setStatus('Connected', 'connected');
                     state.connected = true;
-                    
+
                     // Register this world
                     sendMessage('register_world', {
                         world_name: 'limbo',
                         world_url: window.location.href,
                         display_name: 'Local Limbo'
                     });
-                    
+
                     // Discover portals
                     setTimeout(sendDiscover, 500);
+
+                    // Keep-alive ping every 30 seconds to prevent idle timeout
+                    if (state.pingInterval) clearInterval(state.pingInterval);
+                    state.pingInterval = setInterval(() => {
+                        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                            sendMessage('ping');
+                        }
+                    }, 30000);
                 };
                 
                 state.ws.onmessage = (event) => {
@@ -484,7 +493,11 @@
                     log('Disconnected from relay', 'error');
                     setStatus('Disconnected', 'disconnected');
                     state.connected = false;
-                    
+                    if (state.pingInterval) {
+                        clearInterval(state.pingInterval);
+                        state.pingInterval = null;
+                    }
+
                     // Retry connection
                     setTimeout(connectToRelay, 5000);
                 };
@@ -546,6 +559,10 @@
                     
                 case 'error':
                     log(`Error: ${msg.message}`, 'error');
+                    break;
+
+                case 'pong':
+                    // Keep-alive response, no action needed
                     break;
             }
         }
@@ -766,6 +783,9 @@
                             // If we're still here after 100ms, close() was blocked
                             setTimeout(() => {
                                 if (!window.closed) {
+                                    // Hide the old overlay before showing travel complete
+                                    overlay.classList.remove('active');
+                                    text.classList.remove('active');
                                     showTravelCompleteScreen();
                                 }
                             }, 100);
