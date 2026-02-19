@@ -354,7 +354,8 @@
             inPortal: false,
             handoffPending: false,
             travelComplete: false,
-            pingInterval: null
+            pingInterval: null,
+            reRegisterInterval: null
         };
         
         function log(msg, type = 'info') {
@@ -515,13 +516,26 @@
                     setTimeout(sendDiscover, 2000);
                     setTimeout(sendDiscover, 5000);
 
-                    // Keep-alive ping every 30 seconds to prevent idle timeout
+                    // Keep-alive ping every 15 seconds to prevent idle timeout
                     if (state.pingInterval) clearInterval(state.pingInterval);
                     state.pingInterval = setInterval(() => {
                         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
                             sendMessage('ping');
                         }
-                    }, 30000);
+                    }, 15000);
+
+                    // Periodic re-registration to ensure we stay in the relay's world list
+                    if (state.reRegisterInterval) clearInterval(state.reRegisterInterval);
+                    state.reRegisterInterval = setInterval(() => {
+                        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                            log('Re-registering with relay...');
+                            sendMessage('register_world', {
+                                world_name: 'limbo',
+                                world_url: window.location.href,
+                                display_name: 'Local Limbo'
+                            });
+                        }
+                    }, 60000); // Re-register every minute
                 };
                 
                 state.ws.onmessage = (event) => {
@@ -540,6 +554,10 @@
                     if (state.pingInterval) {
                         clearInterval(state.pingInterval);
                         state.pingInterval = null;
+                    }
+                    if (state.reRegisterInterval) {
+                        clearInterval(state.reRegisterInterval);
+                        state.reRegisterInterval = null;
                     }
 
                     // Retry connection

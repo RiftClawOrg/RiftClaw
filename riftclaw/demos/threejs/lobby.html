@@ -1113,7 +1113,8 @@
             inPortal: false,
             handoffPending: false,
             particles: [],
-            pingInterval: null
+            pingInterval: null,
+            reRegisterInterval: null
         };
         
         // UI Helpers
@@ -1298,13 +1299,26 @@
                 // Send discover after connection
                 setTimeout(sendDiscover, 500);
 
-                // Keep-alive ping every 30 seconds to prevent Replit idle timeout
+                // Keep-alive ping every 15 seconds to prevent idle timeout
                 if (state.pingInterval) clearInterval(state.pingInterval);
                 state.pingInterval = setInterval(() => {
                     if (state.ws && state.ws.readyState === WebSocket.OPEN) {
                         sendMessage('ping');
                     }
-                }, 30000);
+                }, 15000);
+                
+                // Periodic re-registration to ensure we stay in the relay's world list
+                if (state.reRegisterInterval) clearInterval(state.reRegisterInterval);
+                state.reRegisterInterval = setInterval(() => {
+                    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                        log('Re-registering with relay...');
+                        sendMessage('register_world', {
+                            world_name: 'lobby',
+                            world_url: window.location.href,
+                            display_name: 'Replit Lobby'
+                        });
+                    }
+                }, 60000); // Re-register every minute
             };
             
             state.ws.onmessage = (event) => {
@@ -1323,6 +1337,10 @@
                 if (state.pingInterval) {
                     clearInterval(state.pingInterval);
                     state.pingInterval = null;
+                }
+                if (state.reRegisterInterval) {
+                    clearInterval(state.reRegisterInterval);
+                    state.reRegisterInterval = null;
                 }
                 // Auto-reconnect after disconnect
                 setTimeout(connectToRelay, 3000);
