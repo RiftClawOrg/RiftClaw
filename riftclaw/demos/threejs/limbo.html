@@ -333,7 +333,8 @@
             portals: [],
             portalMeshes: [],
             inPortal: false,
-            handoffPending: false
+            handoffPending: false,
+            travelComplete: false
         };
         
         function log(msg, type = 'info') {
@@ -759,9 +760,15 @@
                     const newWindow = window.open(targetUrl + '?inventory=' + encodeURIComponent(inventory.toJSON()), '_blank');
                     
                     if (newWindow) {
-                        // Close this tab after a brief delay
+                        // Try to close this tab (may fail for user-opened windows)
                         setTimeout(() => {
                             window.close();
+                            // If we're still here after 100ms, close() was blocked
+                            setTimeout(() => {
+                                if (!window.closed) {
+                                    showTravelCompleteScreen();
+                                }
+                            }, 100);
                         }, 500);
                     } else {
                         // Fallback if popup blocked
@@ -778,7 +785,62 @@
                 text.classList.remove('active');
             }
         }
-        
+
+        function showTravelCompleteScreen() {
+            // Disconnect from relay
+            if (state.ws) {
+                state.ws.close();
+            }
+
+            // Create travel complete overlay
+            const completeDiv = document.createElement('div');
+            completeDiv.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: linear-gradient(135deg, #1a1a2e 0%, #0a0a15 100%);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                color: #00d5ff;
+                font-family: 'Courier New', monospace;
+                text-align: center;
+            `;
+
+            completeDiv.innerHTML = `
+                <div style="font-size: 5rem; margin-bottom: 20px; animation: pulse 2s infinite;">🌀</div>
+                <h1 style="font-size: 2rem; margin-bottom: 10px; text-shadow: 0 0 20px #00d5ff;">Travel Complete!</h1>
+                <p style="font-size: 1.2rem; color: #888; margin-bottom: 30px;">You have crossed to another world.</p>
+                <p style="font-size: 1rem; color: #666; max-width: 400px; line-height: 1.5;">
+                    Check your other browser tab for the destination world.<br>
+                    You can close this tab now.
+                </p>
+                <button onclick="window.close();" style="
+                    margin-top: 30px;
+                    padding: 15px 30px;
+                    background: rgba(0, 213, 255, 0.2);
+                    border: 2px solid #00d5ff;
+                    color: #00d5ff;
+                    font-size: 1rem;
+                    cursor: pointer;
+                    border-radius: 8px;
+                    transition: all 0.3s;
+                " onmouseover="this.style.background='rgba(0, 213, 255, 0.4)'" 
+                onmouseout="this.style.background='rgba(0, 213, 255, 0.2)'">Close This Tab</button>
+            `;
+
+            document.body.appendChild(completeDiv);
+
+            // Stop animation loop
+            state.travelComplete = true;
+
+            log('Travel complete - check your other tab!', 'info');
+        }
+
         // ============================================
         // THREE.JS SCENE - LIMBO WORLD
         // ============================================
@@ -973,8 +1035,11 @@
         // ============================================
         
         function animate() {
+            // Stop animation if travel is complete
+            if (state.travelComplete) return;
+
             requestAnimationFrame(animate);
-            
+
             const time = Date.now() * 0.001;
             
             // Animate portals with enhanced effects
