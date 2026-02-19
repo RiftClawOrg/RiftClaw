@@ -468,8 +468,10 @@
                         display_name: 'Local Limbo'
                     });
 
-                    // Discover portals
+                    // Discover portals - retry a few times to catch worlds that are still connecting
                     setTimeout(sendDiscover, 500);
+                    setTimeout(sendDiscover, 2000);
+                    setTimeout(sendDiscover, 5000);
 
                     // Keep-alive ping every 30 seconds to prevent idle timeout
                     if (state.pingInterval) clearInterval(state.pingInterval);
@@ -556,7 +558,13 @@
                     log(`Handoff rejected: ${msg.reason}`, 'error');
                     state.handoffPending = false;
                     break;
-                    
+
+                case 'register_confirm':
+                    log(`Registered as world: ${msg.world_name}`);
+                    // Discover again after registration to make sure we see all worlds
+                    setTimeout(sendDiscover, 100);
+                    break;
+
                 case 'error':
                     log(`Error: ${msg.message}`, 'error');
                     break;
@@ -568,13 +576,14 @@
         }
         
         function handleDiscoverResponse(msg) {
+            log(`Discover response: ${msg.portals?.length || 0} portals, ${msg.registered_worlds || '?'} worlds registered`);
             if (msg.portals && msg.portals.length > 0) {
                 state.portals = msg.portals;
-                log(`Discovered ${msg.portals.length} portal(s)`);
+                log(`Discovered ${msg.portals.length} portal(s): ${msg.portals.map(p => p.name).join(', ')}`);
                 updatePortalList();
                 spawnPortals();
             } else {
-                log('No portals discovered');
+                log('No portals discovered - other worlds may be offline');
             }
         }
         

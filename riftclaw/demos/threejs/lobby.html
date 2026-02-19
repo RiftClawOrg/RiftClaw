@@ -1319,6 +1319,8 @@
                     clearInterval(state.pingInterval);
                     state.pingInterval = null;
                 }
+                // Auto-reconnect after disconnect
+                setTimeout(connectToRelay, 3000);
             };
             
             state.ws.onerror = (err) => {
