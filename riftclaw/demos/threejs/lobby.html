@@ -1272,11 +1272,16 @@
         // WEBSOCKET - RIFTCLAW PROTOCOL
         // ============================================
         
+        // ============================================
+        // RELAY CONFIGURATION
+        // Change this to point to your relay server
+        // ============================================
+        const RELAY_URL = 'wss://riftclaw-relay.replit.app';
+        // For local testing: const RELAY_URL = 'ws://localhost:8765';
+
         function connectToRelay() {
-            const relayUrl = 'wss://rift-claw--riftclaw.replit.app';
-            log(`Connecting to relay at ${relayUrl}...`);
-            
-            state.ws = new WebSocket(relayUrl);
+            log(`Connecting to relay at ${RELAY_URL}...`);
+            state.ws = new WebSocket(RELAY_URL);
             
             state.ws.onopen = () => {
                 log('Connected to relay!', 'received');
