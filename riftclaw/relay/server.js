@@ -137,7 +137,8 @@ const handlers = {
     if (!conn) return;
 
     console.log(`[Discover] Agent ${message.agent_id} discovering portals`);
-    
+    console.log(`[Discover] Connection ID: ${conn.id}, worldName: ${conn.worldName || 'none'}`);
+
     // Get the requesting world's name (if it's a world)
     const requestingWorld = conn.worldName;
     console.log(`[Discover] Requesting world: ${requestingWorld || 'agent'}`);
@@ -245,6 +246,20 @@ const handlers = {
   // Keep-alive ping from worlds to prevent idle timeout
   ping(ws, message) {
     ws.send(createMessage('pong', { timestamp: getTimestamp() }));
+  },
+
+  // Admin/debug: list all connections
+  admin_status(ws, message) {
+    const status = {
+      connections: connections.size,
+      worlds: Array.from(worlds.keys()),
+      agents: Array.from(connections.values()).map(c => ({
+        id: c.id,
+        worldName: c.worldName,
+        isWorld: c.isWorld
+      }))
+    };
+    ws.send(createMessage('admin_status_response', status));
   },
 
   // Default handler for unknown types
